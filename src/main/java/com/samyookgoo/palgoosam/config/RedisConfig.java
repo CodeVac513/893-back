@@ -20,7 +20,10 @@ public class RedisConfig {
 
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
-        return new LettuceConnectionFactory();
+        LettuceConnectionFactory factory = new LettuceConnectionFactory();
+        factory.setHostName("localhost");  // 명시적으로 설정
+        factory.setPort(6379);
+        return factory;
     }
 
     @Bean
@@ -40,13 +43,13 @@ public class RedisConfig {
         return template;
     }
 
-    @Bean
-    public ChannelTopic auctionStatusTopic() {
-        return new ChannelTopic("auction:status");
-    }
-
-    @Bean
-    public ChannelTopic lockReleaseTopic() {
-        return new ChannelTopic("lock.release");
-    }
+//    @Bean
+//    public ChannelTopic auctionStatusTopic() {
+//        return new ChannelTopic("auction:status");
+//    }
+//
+//    @Bean
+//    public ChannelTopic lockReleaseTopic() {
+//        return new ChannelTopic("lock.release");
+//    }
 }

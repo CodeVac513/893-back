@@ -34,7 +34,7 @@ import com.samyookgoo.palgoosam.auth.service.AuthService;
 import com.samyookgoo.palgoosam.bid.domain.Bid;
 import com.samyookgoo.palgoosam.bid.exception.BidNotFoundException;
 import com.samyookgoo.palgoosam.bid.repository.BidRepository;
-import com.samyookgoo.palgoosam.common.s3.S3Service;
+//import com.samyookgoo.palgoosam.common.s3.S3Service;
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
 import com.samyookgoo.palgoosam.payment.constant.PaymentStatus;
 import com.samyookgoo.palgoosam.payment.domain.Payment;
@@ -60,9 +60,9 @@ import java.util.stream.IntStream;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.data.redis.core.StringRedisTemplate;
+//import org.springframework.beans.factory.annotation.Value;
+//import org.springframework.data.redis.core.RedisTemplate;
+//import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -79,14 +79,14 @@ public class AuctionService {
     private final AuthService authService;
     private final PaymentRepository paymentRepository;
     private final AuctionSearchRepository auctionSearchRepository;
-    private final S3Service s3Service;
-    private final StringRedisTemplate stringRedisTemplate;
+    //    private final S3Service s3Service;
+//    private final StringRedisTemplate stringRedisTemplate;
 
-    @Value("${cloud.aws.s3.bucket}")
-    private String bucket;
+    //    @Value("${cloud.aws.s3.bucket}")
+    private String bucket = "test";
 
-    @Value("${cloud.aws.region.static}")
-    private String region;
+    //    @Value("${cloud.aws.region.static}")
+    private String region = "test";
 
     @Transactional
     public AuctionCreateResponse createAuction(AuctionCreateRequest request) {
@@ -105,8 +105,8 @@ public class AuctionService {
         Auction auction = Auction.from(request, category, user, startTime, endTime);
         auctionRepository.save(auction);
 
-        setRedisStartTrigger(auction.getId(), auction.getStartTime());
-        setRedisEndTrigger(auction.getId(), auction.getEndTime());
+//        setRedisStartTrigger(auction.getId(), auction.getStartTime());
+//        setRedisEndTrigger(auction.getId(), auction.getEndTime());
 
         List<AuctionImageResponse> imageResponses = saveAuctionImages(request.getImages(), auction);
 
@@ -290,7 +290,7 @@ public class AuctionService {
                 .collect(Collectors.toList());
 
         for (AuctionImage image : imagesToDelete) {
-            s3Service.deleteObject(image.getStoreName());
+//            s3Service.deleteObject(image.getStoreName());
             auctionImageRepository.delete(image);
         }
 
@@ -331,8 +331,8 @@ public class AuctionService {
             }
         }
 
-        setRedisStartTrigger(auction.getId(), auction.getStartTime());
-        setRedisEndTrigger(auction.getId(), auction.getEndTime());
+//        setRedisStartTrigger(auction.getId(), auction.getStartTime());
+//        setRedisEndTrigger(auction.getId(), auction.getEndTime());
 
         CategoryResponse categoryResponse = (request.getCategory() != null)
                 ? CategoryResponse.from(request.getCategory())
@@ -364,7 +364,7 @@ public class AuctionService {
 
         if (auction.getStartTime().minusMinutes(10).isAfter(now)) {
             softDeleteAuction(auctionId, auction);
-            deleteRedisTriggers(auctionId);
+//            deleteRedisTriggers(auctionId);
             return;
         }
 
@@ -552,7 +552,7 @@ public class AuctionService {
                     image.setIsDeleted(true);
                     auctionImageRepository.save(image);
                 } else {
-                    s3Service.deleteObject(image.getStoreName());
+//                    s3Service.deleteObject(image.getStoreName());
                     auctionImageRepository.delete(image);
                 }
             } catch (Exception e) {
@@ -606,7 +606,7 @@ public class AuctionService {
         long secondsUntilStart = Duration.between(LocalDateTime.now(), startTime).getSeconds();
 
         if (secondsUntilStart > 0) {
-            stringRedisTemplate.opsForValue().set(redisKey, "경매 시작", secondsUntilStart, TimeUnit.SECONDS);
+//            stringRedisTemplate.opsForValue().set(redisKey, "경매 시작", secondsUntilStart, TimeUnit.SECONDS);
         }
     }
 
@@ -614,15 +614,15 @@ public class AuctionService {
         String redisKey = "auction:trigger:end:" + auctionId;
         long secondsUntilEnd = Duration.between(LocalDateTime.now(), endTime).getSeconds();
         if (secondsUntilEnd > 0) {
-            stringRedisTemplate.opsForValue()
-                    .set(redisKey, "경매 종료", secondsUntilEnd, TimeUnit.SECONDS);
+//            stringRedisTemplate.opsForValue()
+//                    .set(redisKey, "경매 종료", secondsUntilEnd, TimeUnit.SECONDS);
         }
     }
 
     private void deleteRedisTriggers(Long auctionId) {
         String startKey = "auction:trigger:start:" + auctionId;
         String endKey = "auction:trigger:end:" + auctionId;
-        stringRedisTemplate.delete(startKey);
-        stringRedisTemplate.delete(endKey);
+//        stringRedisTemplate.delete(startKey);
+//        stringRedisTemplate.delete(endKey);
     }
 }

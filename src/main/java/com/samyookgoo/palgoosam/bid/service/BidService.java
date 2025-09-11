@@ -13,7 +13,7 @@ import com.samyookgoo.palgoosam.bid.service.response.BidStatsResponse;
 import com.samyookgoo.palgoosam.common.lock.LockInfo;
 import com.samyookgoo.palgoosam.common.lock.LockRetryHandler;
 import com.samyookgoo.palgoosam.common.lock.TaskWrapper;
-import com.samyookgoo.palgoosam.common.service.RedisLockService;
+//import com.samyookgoo.palgoosam.common.service.RedisLockService;
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
 import com.samyookgoo.palgoosam.user.domain.User;
 import java.time.Duration;
@@ -35,7 +35,7 @@ public class BidService {
     private final BidRepository bidRepository;
     private final AuctionRepository auctionRepository;
     private final SseService sseService;
-    private final RedisLockService redisLockService;
+//    private final RedisLockService redisLockService;
     private final BidExecutorService bidExecutorService;
     private final LockRetryHandler lockRetryHandler;
 
@@ -81,23 +81,23 @@ public class BidService {
         String lockKey = "lock:bid:" + auctionId;
         String uniqueId = UUID.randomUUID().toString();
 
-        if (!redisLockService.tryAcquire(lockKey, Duration.ofSeconds(10), uniqueId)) {
-            TaskWrapper wrapper = new TaskWrapper(() -> {
-                String innerUniqueId = UUID.randomUUID().toString();
-
-                if (!redisLockService.tryAcquire(lockKey, Duration.ofSeconds(10), innerUniqueId)) {
-                    log.warn("TaskWrapper 실행 중 락 획득 실패 - lockKey={}", lockKey);
-                    return;
-                }
-
-                bidExecutorService.placeBid(auctionId, user, price, new LockInfo(lockKey, innerUniqueId));
-
-            }, SecurityContextHolder.getContext());
-
-            lockRetryHandler.register(lockKey, wrapper);
-            log.info("입찰 요청이 등록 되었습니다. auctionId = {}, price = {}", auctionId, price);
-            return;
-        }
+//        if (!redisLockService.tryAcquire(lockKey, Duration.ofSeconds(10), uniqueId)) {
+//            TaskWrapper wrapper = new TaskWrapper(() -> {
+//                String innerUniqueId = UUID.randomUUID().toString();
+//
+//                if (!redisLockService.tryAcquire(lockKey, Duration.ofSeconds(10), innerUniqueId)) {
+//                    log.warn("TaskWrapper 실행 중 락 획득 실패 - lockKey={}", lockKey);
+//                    return;
+//                }
+//
+//                bidExecutorService.placeBid(auctionId, user, price, new LockInfo(lockKey, innerUniqueId));
+//
+//            }, SecurityContextHolder.getContext());
+//
+//            lockRetryHandler.register(lockKey, wrapper);
+//            log.info("입찰 요청이 등록 되었습니다. auctionId = {}, price = {}", auctionId, price);
+//            return;
+//        }
 
         bidExecutorService.placeBid(auctionId, user, price, new LockInfo(lockKey, uniqueId));
     }

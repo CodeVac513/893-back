@@ -8,7 +8,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 
-import com.samyookgoo.palgoosam.schedule.AuctionStatusEventResponse;
+//import com.samyookgoo.palgoosam.schedule.AuctionStatusEventResponse;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
@@ -85,22 +85,22 @@ public class SseService {
         sseEmitters.removeAll(deadEmitters);
     }
 
-    public void broadcastStatusUpdate(Long auctionId, AuctionStatusEventResponse response) {
-        List<SseEmitter> sseEmitters = bidEmitters.getOrDefault(auctionId, new ArrayList<>());
-        List<SseEmitter> deadEmitters = new ArrayList<>();
-
-        sseEmitters.forEach(emitter -> {
-            try {
-                emitter.send(SseEmitter.event()
-                        .name("status-update")
-                        .data(response));
-            } catch (IOException e) {
-                emitter.completeWithError(e);
-                deadEmitters.add(emitter);
-            }
-        });
-        sseEmitters.removeAll(deadEmitters);
-    }
+//    public void broadcastStatusUpdate(Long auctionId, AuctionStatusEventResponse response) {
+//        List<SseEmitter> sseEmitters = bidEmitters.getOrDefault(auctionId, new ArrayList<>());
+//        List<SseEmitter> deadEmitters = new ArrayList<>();
+//
+//        sseEmitters.forEach(emitter -> {
+//            try {
+//                emitter.send(SseEmitter.event()
+//                        .name("status-update")
+//                        .data(response));
+//            } catch (IOException e) {
+//                emitter.completeWithError(e);
+//                deadEmitters.add(emitter);
+//            }
+//        });
+//        sseEmitters.removeAll(deadEmitters);
+//    }
 
     private void removeEmitter(Long auctionId, SseEmitter emitter) {
       List<SseEmitter> emitters = bidEmitters.get(auctionId);
