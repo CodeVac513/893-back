@@ -113,6 +113,9 @@ dependencies {
     // Redis
     implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 
+    // Elasticsearch
+    implementation 'org.springframework.boot:spring-boot-starter-data-elasticsearch'
+
     //actuator 추가
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
 
