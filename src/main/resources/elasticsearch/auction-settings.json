@@ -1,0 +1,44 @@
+{
+  "analysis": {
+    "filter": {
+      "product_synonyms": {
+        "type": "synonym",
+        "synonyms": [
+          "노트북, 랩탑, notebook, laptop",
+          "전화기, 휴대폰, 휴대전화, 스마트폰, 휴대폰, 핸드폰, phone, mobile phone, smartphone, cell phone",
+          "아이폰, iphone",
+          "맥, mac",
+          "삼성, samsung"
+        ]
+      }
+    },
+    "analyzer": {
+      "auction_title_analyzer": {
+        "char_filter": [],
+        "tokenizer": "nori_tokenizer",
+        "filter": [
+          "nori_part_of_speech",
+          "nori_readingform",
+          "lowercase",
+          "stop",
+          "stemmer",
+          "product_synonyms"
+        ]
+      },
+      "auction_description_analyzer": {
+        "char_filter": [
+          "html_strip"
+        ],
+        "tokenizer": "nori_tokenizer",
+        "filter": [
+          "nori_part_of_speech",
+          "nori_readingform",
+          "lowercase",
+          "stop",
+          "stemmer",
+          "product_synonyms"
+        ]
+      }
+    }
+  }
+}
