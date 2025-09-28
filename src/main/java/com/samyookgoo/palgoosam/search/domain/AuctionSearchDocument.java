@@ -49,13 +49,13 @@ public class AuctionSearchDocument {
     @Field(name = "scrap_count", type = FieldType.Long)
     private Long scrapCount;
 
-    @Field(name = "created_at", type = FieldType.Date)
+    @Field(name = "created_at", type = FieldType.Date, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
 
-    @Field(name = "start_time", type = FieldType.Date)
+    @Field(name = "start_time", type = FieldType.Date, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startTime;
 
-    @Field(name = "end_time", type = FieldType.Date)
+    @Field(name = "end_time", type = FieldType.Date, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endTime;
 
     // 검색 결과 표시용
