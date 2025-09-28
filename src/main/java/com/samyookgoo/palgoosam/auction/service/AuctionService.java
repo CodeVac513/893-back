@@ -1,6 +1,9 @@
 package com.samyookgoo.palgoosam.auction.service;
 
+import co.elastic.clients.elasticsearch._types.FieldValue;
+import co.elastic.clients.elasticsearch._types.query_dsl.*;
 import com.samyookgoo.palgoosam.auction.constant.AuctionStatus;
+import com.samyookgoo.palgoosam.auction.constant.ItemCondition;
 import com.samyookgoo.palgoosam.auction.domain.Auction;
 import com.samyookgoo.palgoosam.auction.domain.AuctionImage;
 import com.samyookgoo.palgoosam.auction.domain.AuctionSearchProjection;
@@ -10,14 +13,7 @@ import com.samyookgoo.palgoosam.auction.dto.request.AuctionCreateRequest;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionImageRequest;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionSearchRequestDto;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionUpdateRequest;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionCreateResponse;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionDetailResponse;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionImageResponse;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionSearchResponseDto;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionUpdatePageResponse;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionUpdateResponse;
-import com.samyookgoo.palgoosam.auction.dto.response.CategoryResponse;
-import com.samyookgoo.palgoosam.auction.dto.response.RelatedAuctionResponse;
+import com.samyookgoo.palgoosam.auction.dto.response.*;
 import com.samyookgoo.palgoosam.auction.exception.AuctionCategoryException;
 import com.samyookgoo.palgoosam.auction.exception.AuctionForbiddenException;
 import com.samyookgoo.palgoosam.auction.exception.AuctionImageException;
@@ -40,6 +36,8 @@ import com.samyookgoo.palgoosam.payment.constant.PaymentStatus;
 import com.samyookgoo.palgoosam.payment.domain.Payment;
 import com.samyookgoo.palgoosam.payment.exception.PaymentNotFoundException;
 import com.samyookgoo.palgoosam.payment.repository.PaymentRepository;
+import com.samyookgoo.palgoosam.search.domain.AuctionSearchDocument;
+import com.samyookgoo.palgoosam.search.repository.AuctionSearchElasticsearchRepository;
 import com.samyookgoo.palgoosam.user.domain.User;
 import com.samyookgoo.palgoosam.user.exception.UserNotFoundException;
 import com.samyookgoo.palgoosam.user.repository.ScrapRepository;
@@ -52,17 +50,20 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 //import org.springframework.beans.factory.annotation.Value;
 //import org.springframework.data.redis.core.RedisTemplate;
 //import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.elasticsearch.client.elc.NativeQuery;
+import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
+import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -79,6 +80,8 @@ public class AuctionService {
     private final AuthService authService;
     private final PaymentRepository paymentRepository;
     private final AuctionSearchRepository auctionSearchRepository;
+    private final AuctionSearchElasticsearchRepository auctionSearchElasticsearchRepository;
+    private final ElasticsearchOperations elasticsearchOperations;
     //    private final S3Service s3Service;
 //    private final StringRedisTemplate stringRedisTemplate;
 
@@ -624,5 +627,201 @@ public class AuctionService {
         String endKey = "auction:trigger:end:" + auctionId;
 //        stringRedisTemplate.delete(startKey);
 //        stringRedisTemplate.delete(endKey);
+    }
+
+    public AuctionSearchDocumentResponseDto searchAuctions(AuctionSearchRequestDto auctionSearchRequestDto) {
+        Query multiMatchQuery = MultiMatchQuery.of(m -> m
+                .query(auctionSearchRequestDto.getKeyword())
+                .fields("title^2", "description^1")
+                .fuzziness("AUTO")
+        )._toQuery();
+
+        // term filter 쿼리
+        List<Query> filters = buildFilters(auctionSearchRequestDto);
+
+        Query boolQuery = BoolQuery.of(b -> b
+                .must(multiMatchQuery)
+                .filter(filters)
+        )._toQuery();
+
+        NativeQuery nativeQuery = NativeQuery.builder()
+                .withQuery(boolQuery)
+                // 정렬 - 정렬 조건은 5개
+                .withSort(buildSortOptions(auctionSearchRequestDto))
+                .withPageable(PageRequest.of(auctionSearchRequestDto.getPage() - 1, auctionSearchRequestDto.getLimit()))
+                .build();
+
+        SearchHits<AuctionSearchDocument> searchHits = this.elasticsearchOperations.search(
+                nativeQuery,
+                AuctionSearchDocument.class
+        );
+
+        NativeQuery countQuery = NativeQuery.builder()
+                .withQuery(boolQuery)
+                .build();
+
+        return new AuctionSearchDocumentResponseDto(elasticsearchOperations.count(countQuery, AuctionSearchDocument.class), searchHits.getSearchHits().stream()
+                .map(hit -> {
+                    AuctionSearchDocument auctionSearchDocument = hit.getContent();
+                    return auctionSearchDocument;
+                }).toList());
+    }
+
+    // 헬퍼 메서드를 조합해서 최종 filter 목록을 만듦
+    private List<Query> buildFilters(AuctionSearchRequestDto request) {
+        List<Query> filters = new ArrayList<>();
+
+        // 조건부 - 카테고리가 있으면 사용, 없으면 사용하지 않음.
+        Query categoryFilter = getCategoryIdFilter(request);
+        if (categoryFilter != null) filters.add(categoryFilter);
+
+        // 조건부 - 가격 범위가 있으면 사용, 없으면 사용하지 않음.
+        Query priceFilter = getPriceRangeFilter(request);
+        if (priceFilter != null) filters.add(priceFilter);
+
+        // 조건부 - 물건 상태
+        Query itemConditionFilter = getItemConditionFilter(request);
+        if (itemConditionFilter != null) filters.add(itemConditionFilter);
+
+        // 조건부 - 경매 상태
+        Query auctionStatusFilter = getAuctionStatusFilter(request);
+        if (auctionStatusFilter != null) filters.add(auctionStatusFilter);
+
+        return filters;
+    }
+
+    // 조건부 검색을 위한 헬퍼 메서드
+
+    private Query getCategoryIdFilter(AuctionSearchRequestDto request) {
+        Long categoryId = request.getCategoryId();
+
+        if (categoryId == null) return null;
+
+        Query categoryFilter = TermQuery.of(t -> t
+                .field("category_id")
+                .value(categoryId)
+        )._toQuery();
+
+        return categoryFilter;
+    }
+
+    private Query getPriceRangeFilter(AuctionSearchRequestDto request) {
+        Integer minPrice = request.getMinPrice();
+        Integer maxPrice = request.getMaxPrice();
+
+        if (minPrice == null && maxPrice == null) {
+            return null;
+        }
+
+        if (minPrice != null && maxPrice != null) {
+            Query priceRangeFilter = NumberRangeQuery.of(r -> r
+                    .field("current_price")
+                    .gte((double) (minPrice))
+                    .lte((double) (maxPrice))
+            )._toRangeQuery()._toQuery();
+            return priceRangeFilter;
+        }
+
+        if (minPrice != null) {
+            Query priceRangeFilter = NumberRangeQuery.of(r -> r
+                    .field("current_price")
+                    .gte((double) (minPrice))
+            )._toRangeQuery()._toQuery();
+            return priceRangeFilter;
+        }
+
+        Query priceRangeFilter = NumberRangeQuery.of(r -> r
+                .field("current_price")
+                .lte((double) (maxPrice))
+        )._toRangeQuery()._toQuery();
+        return priceRangeFilter;
+    }
+
+    private Query getItemConditionFilter(AuctionSearchRequestDto request) {
+        List<String> conditions = new ArrayList<>();
+        if (request.getIsBrandNew() != null && request.getIsBrandNew()) {
+            log.info("여기를 확인해볼까!!!!!!!!!!!!!!!!!!!!!!!!!");
+            conditions.add(ItemCondition.brand_new.toString());
+        }
+        if (request.getIsLikeNew() != null && request.getIsLikeNew()) {
+            conditions.add(ItemCondition.like_new.toString());
+        }
+        if (request.getIsGentlyUsed() != null && request.getIsGentlyUsed()) {
+            conditions.add(ItemCondition.gently_used.toString());
+        }
+        if (request.getIsHeavilyUsed() != null && request.getIsHeavilyUsed()) {
+            conditions.add(ItemCondition.heavily_used.toString());
+        }
+        if (request.getIsDamaged() != null && request.getIsDamaged()) {
+            conditions.add(ItemCondition.damaged.toString());
+        }
+
+        if (conditions.isEmpty()) {
+            log.info("item condition 여기서 호출되어 null 상태임!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            return null;
+        }
+
+
+        Query itemConditionFilter = TermsQuery.of(b -> b
+                .field("item_condition")
+                .terms(TermsQueryField.of(tf -> tf.value(
+                        conditions.stream()
+                                .map(FieldValue::of)
+                                .collect(Collectors.toList())
+                )))
+        )._toQuery();
+
+        return itemConditionFilter;
+    }
+
+    private Query getAuctionStatusFilter(AuctionSearchRequestDto request) {
+        List<String> conditions = new ArrayList<>();
+        if (request.getIsPending() != null && request.getIsPending()) {
+            conditions.add(AuctionStatus.pending.toString());
+        }
+        if (request.getIsActive() != null && request.getIsActive()) {
+            conditions.add(AuctionStatus.active.toString());
+        }
+        if (request.getIsCompleted() != null && request.getIsCompleted()) {
+            conditions.add(AuctionStatus.completed.toString());
+        }
+
+        if (conditions.isEmpty()) {
+            log.info("경매 상태 여기서 호출되어 null 상태임!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
+            return null;
+        }
+
+        Query auctionStatusFilter = TermsQuery.of(b -> b
+                .field("status")
+                .terms(TermsQueryField.of(tf -> tf.value(
+                        conditions.stream()
+                                .map(FieldValue::of)
+                                .collect(Collectors.toList())
+                )))
+        )._toQuery();
+
+        return auctionStatusFilter;
+    }
+
+    private Sort buildSortOptions(AuctionSearchRequestDto request) {
+        String sortBy = request.getSortBy();
+
+        if (sortBy == null) {
+            return Sort.by(Sort.Direction.DESC, "created_at");
+        }
+
+        switch (sortBy) {
+            case "price_asc":
+                return Sort.by(Sort.Direction.ASC, "current_price");
+            case "price_desc":
+                return Sort.by(Sort.Direction.DESC, "current_price");
+            case "scrap_count_desc":
+                return Sort.by(Sort.Direction.DESC, "scrap_count");
+            case "bidder_count_desc":
+                return Sort.by(Sort.Direction.DESC, "bidder_count");
+            default:
+                return Sort.by(Sort.Direction.DESC, "created_at");
+        }
     }
 }
