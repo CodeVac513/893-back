@@ -10,12 +10,7 @@ import com.samyookgoo.palgoosam.auction.api_docs.auction.RelatedAuctionGetApi;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionCreateRequest;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionSearchRequestDto;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionUpdateRequest;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionCreateResponse;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionDetailResponse;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionSearchResponseDto;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionUpdatePageResponse;
-import com.samyookgoo.palgoosam.auction.dto.response.AuctionUpdateResponse;
-import com.samyookgoo.palgoosam.auction.dto.response.RelatedAuctionResponse;
+import com.samyookgoo.palgoosam.auction.dto.response.*;
 import com.samyookgoo.palgoosam.auction.service.AuctionService;
 import com.samyookgoo.palgoosam.common.response.BaseResponse;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -48,6 +43,13 @@ public class AuctionController {
             @Valid AuctionSearchRequestDto auctionSearchRequestDto) {
         return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success("정상적으로 조회되었습니다.",
                 auctionService.search(auctionSearchRequestDto)));
+    }
+
+    @GetMapping("/search-es")
+    public ResponseEntity<BaseResponse<AuctionSearchDocumentResponseDto>> searchWithElasticsearch(
+            @Valid AuctionSearchRequestDto auctionSearchRequestDto) {
+        return ResponseEntity.status(HttpStatus.OK).body(BaseResponse.success("정상적으로 조회되었습니다.",
+                auctionService.searchAuctions(auctionSearchRequestDto)));
     }
 
     @AuctionCreateApi
