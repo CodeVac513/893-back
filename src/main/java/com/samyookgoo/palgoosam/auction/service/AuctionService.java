@@ -740,7 +740,6 @@ public class AuctionService {
     private Query getItemConditionFilter(AuctionSearchRequestDto request) {
         List<String> conditions = new ArrayList<>();
         if (request.getIsBrandNew() != null && request.getIsBrandNew()) {
-            log.info("여기를 확인해볼까!!!!!!!!!!!!!!!!!!!!!!!!!");
             conditions.add(ItemCondition.brand_new.toString());
         }
         if (request.getIsLikeNew() != null && request.getIsLikeNew()) {
@@ -757,7 +756,6 @@ public class AuctionService {
         }
 
         if (conditions.isEmpty()) {
-            log.info("item condition 여기서 호출되어 null 상태임!!!!!!!!!!!!!!!!!!!!!!!!!!!");
             return null;
         }
 
@@ -787,8 +785,6 @@ public class AuctionService {
         }
 
         if (conditions.isEmpty()) {
-            log.info("경매 상태 여기서 호출되어 null 상태임!!!!!!!!!!!!!!!!!!!!!!!!!!!");
-
             return null;
         }
 
