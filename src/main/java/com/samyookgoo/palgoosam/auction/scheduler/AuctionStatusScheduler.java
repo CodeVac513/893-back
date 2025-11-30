@@ -14,7 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuctionStatusScheduler {
     private final AuctionRepository auctionRepository;
 
-    @Scheduled(fixedDelay = 60000)  // 1분마다 실행
+//    @Scheduled(fixedDelay = 60000)  // 1분마다 실행
     @Transactional
     public void updateAuctionStatus() {
         LocalDateTime now = LocalDateTime.now();
