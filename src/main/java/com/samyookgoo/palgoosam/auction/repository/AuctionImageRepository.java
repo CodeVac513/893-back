@@ -10,8 +10,6 @@ import org.springframework.data.repository.query.Param;
 public interface AuctionImageRepository extends JpaRepository<AuctionImage, Long> {
     List<AuctionImage> findByAuctionId(Long auctionId);
 
-    List<AuctionImage> findByAuctionIdAndIsDeletedFalse(Long auctionId);
-
     @Query("SELECT a FROM AuctionImage a WHERE a.auction.id IN :auctionIds AND a.imageSeq = 0")
     List<AuctionImage> findMainImagesByAuctionIds(@Param("auctionIds") List<Long> auctionIds);
 

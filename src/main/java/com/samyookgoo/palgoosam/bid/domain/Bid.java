@@ -1,7 +1,6 @@
 package com.samyookgoo.palgoosam.bid.domain;
 
 import com.samyookgoo.palgoosam.auction.domain.Auction;
-import com.samyookgoo.palgoosam.bid.exception.BidBadRequestException;
 import com.samyookgoo.palgoosam.bid.exception.BidForbiddenException;
 import com.samyookgoo.palgoosam.bid.exception.BidInvalidStateException;
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
@@ -73,22 +72,8 @@ public class Bid {
     }
 
     public void cancel() {
-        this.isWinning = false;
-        this.isDeleted = true;
-    }
-
-    public void win() {
-        this.isWinning = true;
-    }
-
-    public void lose() {
-        this.isWinning = false;
-    }
-
-    public void validatePriceIsHigherThan(int newPrice) {
-        if (newPrice <= this.price) {
-            throw new BidBadRequestException(ErrorCode.BID_NOT_HIGHEST);
-        }
+        this.setIsWinning(false);
+        this.setIsDeleted(true);
     }
 
     public void validateCancelConditions(Long userId, LocalDateTime now) {

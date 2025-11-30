@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
 class DeliveryAddressEntityTest {
 
     @Test
-    @DisplayName("Request DTO를 통해서 DeliveryAddress Entity를 생성할 수 있다.")
-    public void from_ValidParameters_CreatesNewEntity() {
+    @DisplayName("정적 팩토리 메서드 from으로 새로운 엔티티를 생성할 수 있다.")
+    public void Given_DeliveryAddressRequestDtoAndUser_When_CallfromMethod_Then_ReturnDelivery() {
         //given
         DeliveryAddressRequestDto requestDto = DeliveryAddressRequestDto.builder()
                 .name("홍길동")
@@ -36,51 +36,5 @@ class DeliveryAddressEntityTest {
         Assertions.assertThat(created.getAddressLine2()).isEqualTo(requestDto.getAddressLine2());
         Assertions.assertThat(created.getIsDefault()).isEqualTo(false);
         Assertions.assertThat(created.getUser()).isEqualTo(user);
-    }
-
-    @Test
-    @DisplayName("기본 배송지에서 일반 배송지로 변경할 수 있다.")
-    public void removeDefault() {
-        //given
-        DeliveryAddressRequestDto requestDto = DeliveryAddressRequestDto.builder()
-                .name("홍길동")
-                .phoneNumber("010-1234-5678")
-                .zipCode("12345")
-                .addressLine1("서울특별시 강남구 테헤란로 123")
-                .addressLine2("ABC빌딩 4층")
-                .isDefault(true)
-                .build();
-
-        User user = new User();
-        DeliveryAddress created = DeliveryAddress.from(requestDto, user);
-
-        //when
-        created.removeDefault();
-
-        //then
-        Assertions.assertThat(created.getIsDefault()).isFalse();
-    }
-
-    @Test
-    @DisplayName("일반 배송지에서 기본 배송지로 변경할 수 있다.")
-    public void setDefault() {
-        //given
-        DeliveryAddressRequestDto requestDto = DeliveryAddressRequestDto.builder()
-                .name("홍길동")
-                .phoneNumber("010-1234-5678")
-                .zipCode("12345")
-                .addressLine1("서울특별시 강남구 테헤란로 123")
-                .addressLine2("ABC빌딩 4층")
-                .isDefault(false)
-                .build();
-
-        User user = new User();
-        DeliveryAddress created = DeliveryAddress.from(requestDto, user);
-
-        //when
-        created.setDefault();
-
-        //then
-        Assertions.assertThat(created.getIsDefault()).isTrue();
     }
 }

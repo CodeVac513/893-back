@@ -16,9 +16,6 @@ import org.springframework.data.repository.query.Param;
 
 
 public interface BidRepository extends JpaRepository<Bid, Long> {
-    
-    @Query("SELECT b FROM Bid b WHERE b.auction.id = :auctionId AND b.isDeleted = false ORDER BY b.price DESC LIMIT 1")
-    Optional<Bid> findTopBidByAuctionIdOrderByPriceDesc(Long auctionId);
 
     List<Bid> findByAuctionIdOrderByCreatedAtDesc(Long auctionId);
 
@@ -51,29 +48,25 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
     @Query("SELECT b.auction.id AS auctionId, COUNT(b.id) AS bidCount FROM Bid b WHERE b.auction.id IN :auctionIds GROUP BY b.auction.id")
     List<AuctionBidCount> countBidsByAuctionIds(@Param("auctionIds") List<Long> auctionIds);
 
-    @Query(value = """
-    SELECT
-        b.auction_id AS auctionId,
-        a.title AS title,
-        a.base_price AS basePrice,
-        b.price AS itemPrice,
-        u.name AS buyer,
-        img.url AS thumbnailUrl
-    FROM (
-             SELECT b.auction_id, b.price, b.bidder_id
-             FROM bid b
-                      JOIN auction a ON b.auction_id = a.id
-             WHERE b.is_winning = true
-               AND a.status = 'COMPLETED'
-               AND a.end_time >= NOW() - INTERVAL 7 DAY
-             ORDER BY b.price DESC
-             LIMIT 5
-         ) AS b
-             JOIN auction a ON a.id = b.auction_id
-             JOIN user u ON u.id = b.bidder_id
-             JOIN auction_image img ON img.auction_id = a.id AND img.image_seq = 0
-    """, nativeQuery = true)
-    List<TopWinningBid> findTop5WinningBids();
+
+    @Query("""
+            SELECT
+                a.id AS auctionId,
+                a.title AS title,
+                a.basePrice AS basePrice,
+                MAX(b.price) AS itemPrice,
+                img.url AS thumbnailUrl,
+                b.bidder.name AS buyer
+            FROM Bid b
+            JOIN b.auction a
+            LEFT JOIN AuctionImage img ON img.auction.id = a.id AND img.imageSeq = 0
+            WHERE b.isWinning = true
+              AND a.status = 'COMPLETED'
+              AND a.endTime >= :sevenDaysAgo
+            GROUP BY a.id, a.title, a.basePrice, img.url, b.bidder.name
+            ORDER BY itemPrice DESC
+            """)
+    List<TopWinningBid> findTop5WinningBids(@Param("sevenDaysAgo") LocalDateTime sevenDaysAgo, Pageable pageable);
 
     @Query("""
                 SELECT new com.samyookgoo.palgoosam.bid.service.response.BidStatsResponse(
@@ -104,7 +97,7 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
                 JOIN user as u ON u.id = b.bidder_id
                 JOIN auction as a ON b.auction_id = a.id
                 LEFT JOIN auction_image as ai ON ai.auction_id = a.id AND ai.image_seq = 0
-                WHERE u.id = :userId AND b.is_deleted=false
+                WHERE u.id = :userId
             ) as ranked
             WHERE rn = 1;
             """, nativeQuery = true)
@@ -115,11 +108,28 @@ public interface BidRepository extends JpaRepository<Bid, Long> {
             FROM bid as b1
             JOIN auction as a ON a.id = b1.auction_id
             JOIN user as u ON u.id = b1.bidder_id
-            LEFT JOIN bid as b2 ON b2.auction_id = a.id and b2.is_deleted = false
+            LEFT JOIN bid as b2 ON b2.auction_id = a.id
             WHERE u.id = :userId
             GROUP BY a.id
             """, nativeQuery = true)
     List<BidForHighestPriceProjection> findHighestBidProjectsByBidderId(@Param("userId") Long userId);
 
+    @Query(value = """
+            SELECT COALESCE(MAX(b.price), 0) as bidHighestPrice, a.id as auctionId
+            FROM auction as a
+            JOIN user as u ON u.id = a.seller_id
+            LEFT JOIN bid as b ON b.auction_id = a.id
+            WHERE u.id = :userId
+            GROUP BY a.id
+            """, nativeQuery = true)
+    List<BidForHighestPriceProjection> findHighestBidProjectsBySellerId(@Param("userId") Long userId);
 
+    @Query(value = """
+            SELECT COALESCE(MAX(b.price), 0) as bidHighestPrice, a.id as auctionId
+            FROM auction as a
+            JOIN scrap as s ON s.auction_id = a.id AND s.user_id = :userId
+            LEFT JOIN bid as b ON b.auction_id = a.id
+            GROUP BY a.id
+            """, nativeQuery = true)
+    List<BidForHighestPriceProjection> findHighestBidProjectsByScraperId(@Param("userId") Long id);
 }

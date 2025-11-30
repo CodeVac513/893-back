@@ -5,8 +5,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import jakarta.validation.constraints.Size;
-import java.util.List;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -39,8 +37,4 @@ public class AuctionCreateRequest {
 
     @NotNull
     private CategoryRequest category;
-
-    @NotNull
-    @Size(min = 1, max = 10, message = "이미지는 1개 이상 10개 이하로 업로드 가능합니다.")
-    private List<AuctionImageRequest> images; // Presigned로 업로드한 S3 key 리스트
 }

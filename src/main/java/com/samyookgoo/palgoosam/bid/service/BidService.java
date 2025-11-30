@@ -1,43 +1,34 @@
 package com.samyookgoo.palgoosam.bid.service;
 
+import com.samyookgoo.palgoosam.auction.domain.Auction;
 import com.samyookgoo.palgoosam.auction.exception.AuctionNotFoundException;
 import com.samyookgoo.palgoosam.auction.repository.AuctionRepository;
 import com.samyookgoo.palgoosam.bid.controller.response.BidEventResponse;
 import com.samyookgoo.palgoosam.bid.controller.response.BidOverviewResponse;
 import com.samyookgoo.palgoosam.bid.controller.response.BidResponse;
+import com.samyookgoo.palgoosam.bid.controller.response.BidResultResponse;
 import com.samyookgoo.palgoosam.bid.domain.Bid;
+import com.samyookgoo.palgoosam.bid.exception.BidBadRequestException;
 import com.samyookgoo.palgoosam.bid.exception.BidInvalidStateException;
 import com.samyookgoo.palgoosam.bid.exception.BidNotFoundException;
 import com.samyookgoo.palgoosam.bid.repository.BidRepository;
 import com.samyookgoo.palgoosam.bid.service.response.BidStatsResponse;
-import com.samyookgoo.palgoosam.common.lock.LockInfo;
-import com.samyookgoo.palgoosam.common.lock.LockRetryHandler;
-import com.samyookgoo.palgoosam.common.lock.TaskWrapper;
-//import com.samyookgoo.palgoosam.common.service.RedisLockService;
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
 import com.samyookgoo.palgoosam.user.domain.User;
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BidService {
     private final BidRepository bidRepository;
     private final AuctionRepository auctionRepository;
     private final SseService sseService;
-//    private final RedisLockService redisLockService;
-    private final BidExecutorService bidExecutorService;
-    private final LockRetryHandler lockRetryHandler;
 
     @Transactional(readOnly = true)
     public BidOverviewResponse getBidOverview(Long auctionId, User user) {
@@ -77,29 +68,23 @@ public class BidService {
                 .build();
     }
 
-    public void placeBidWithLock(Long auctionId, User user, int price) {
-        String lockKey = "lock:bid:" + auctionId;
-        String uniqueId = UUID.randomUUID().toString();
+    @Transactional
+    public BidResultResponse placeBid(Long auctionId, User user, int price) {
+        Auction auction = auctionRepository.findById(auctionId)
+                .orElseThrow(AuctionNotFoundException::new);
 
-//        if (!redisLockService.tryAcquire(lockKey, Duration.ofSeconds(10), uniqueId)) {
-//            TaskWrapper wrapper = new TaskWrapper(() -> {
-//                String innerUniqueId = UUID.randomUUID().toString();
-//
-//                if (!redisLockService.tryAcquire(lockKey, Duration.ofSeconds(10), innerUniqueId)) {
-//                    log.warn("TaskWrapper 실행 중 락 획득 실패 - lockKey={}", lockKey);
-//                    return;
-//                }
-//
-//                bidExecutorService.placeBid(auctionId, user, price, new LockInfo(lockKey, innerUniqueId));
-//
-//            }, SecurityContextHolder.getContext());
-//
-//            lockRetryHandler.register(lockKey, wrapper);
-//            log.info("입찰 요청이 등록 되었습니다. auctionId = {}, price = {}", auctionId, price);
-//            return;
-//        }
+        LocalDateTime now = LocalDateTime.now();
+        Bid newBid = createValidatedBid(auction, user, price, now);
 
-        bidExecutorService.placeBid(auctionId, user, price, new LockInfo(lockKey, uniqueId));
+        deactivatePreviousWinningBid(auctionId);
+
+        bidRepository.save(newBid);
+
+        BidEventResponse event = createBidEventResponse(auctionId, newBid, false);
+        broadcastBidEvent(auctionId, event);
+
+        boolean canCancelBid = !hasUserCancelledBid(auctionId, user.getId());
+        return BidResultResponse.from(BidResponse.from(newBid), canCancelBid);
     }
 
     @Transactional
@@ -145,9 +130,33 @@ public class BidService {
         return bidRepository.existsByAuctionIdAndBidderIdAndIsDeletedTrue(auctionId, userId);
     }
 
+    private Bid createValidatedBid(Auction auction, User user, int price, LocalDateTime now) {
+        if (price > 1_000_000_000) {
+            throw new BidBadRequestException(ErrorCode.BID_EXCEEDS_MAXIMUM);
+        }
+
+        auction.validateBidConditions(user.getId(), price, now);
+        validatePriceIsHighest(auction.getId(), price);
+
+        return Bid.placeBy(auction, user, price);
+    }
+
+    private void deactivatePreviousWinningBid(Long auctionId) {
+        bidRepository.findTopValidBidByAuctionId(auctionId)
+                .ifPresent(prev -> prev.setIsWinning(false));
+    }
+
     private void activateNewWinningBid(Long auctionId) {
         bidRepository.findTopValidBidByAuctionId(auctionId)
-                .ifPresent(Bid::win);
+                .ifPresent(newWinner -> newWinner.setIsWinning(true));
+    }
+
+
+    private void validatePriceIsHighest(Long auctionId, int price) {
+        Integer highestPrice = bidRepository.findMaxBidPriceByAuctionId(auctionId);
+        if (highestPrice != null && price <= highestPrice) {
+            throw new BidBadRequestException(ErrorCode.BID_NOT_HIGHEST);
+        }
     }
 
     private BidEventResponse createBidEventResponse(Long auctionId, Bid bid, boolean isCancelled) {
@@ -165,7 +174,7 @@ public class BidService {
         return bidRepository.findBidStatsByAuctionId(auctionId);
     }
 
-    public void broadcastBidEvent(Long auctionId, BidEventResponse event) {
+    private void broadcastBidEvent(Long auctionId, BidEventResponse event) {
         sseService.broadcastBidUpdate(auctionId, event);
     }
 }

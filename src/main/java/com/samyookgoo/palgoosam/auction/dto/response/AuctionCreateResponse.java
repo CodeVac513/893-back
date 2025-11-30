@@ -41,13 +41,13 @@ public class AuctionCreateResponse {
     @Schema(description = "경매 이미지 목록")
     private List<AuctionImageResponse> images;
 
-    public static AuctionCreateResponse of(
+    public static AuctionCreateResponse from(
             Auction auction,
             List<AuctionImageResponse> images,
             Category category,
             int startDelay,
             int durationTime) {
-
+        
         return AuctionCreateResponse.builder()
                 .auctionId(auction.getId())
                 .title(auction.getTitle())

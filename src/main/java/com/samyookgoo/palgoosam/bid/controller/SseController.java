@@ -1,10 +1,7 @@
 package com.samyookgoo.palgoosam.bid.controller;
 
-import com.samyookgoo.palgoosam.auth.service.AuthService;
-import com.samyookgoo.palgoosam.bid.api_docs.SseAuctionSubscribeApi;
-import com.samyookgoo.palgoosam.bid.api_docs.SseUserSubscribeApi;
+import com.samyookgoo.palgoosam.bid.api_docs.SseSubscribeApi;
 import com.samyookgoo.palgoosam.bid.service.SseService;
-import com.samyookgoo.palgoosam.user.domain.User;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -23,9 +20,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class SseController {
 
     private final SseService sseService;
-    private final AuthService authService;
 
-    @SseAuctionSubscribeApi
+    @SseSubscribeApi
     @CrossOrigin
     @GetMapping(value = "/{auctionId}/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public SseEmitter subscribe(
@@ -33,13 +29,5 @@ public class SseController {
             @PathVariable Long auctionId
     ) {
         return sseService.subscribe(auctionId);
-    }
-
-    @SseUserSubscribeApi
-    @CrossOrigin
-    @GetMapping(value = "/user/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter subscribePersonal() {
-        User currentUser = authService.getAuthorizedUser(authService.getCurrentUser());
-        return sseService.subscribePersonal(currentUser.getId());
     }
 }

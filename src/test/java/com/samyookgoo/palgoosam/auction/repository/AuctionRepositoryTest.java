@@ -245,32 +245,32 @@ class AuctionRepositoryTest {
         assertThat(result.get(0).getScrapCount()).isGreaterThanOrEqualTo(result.get(1).getScrapCount());
     }
 
-    @DisplayName("서브카테고리 ID로 상위 50개 경매 조회")
-    @Test
-    void testFindTop50BySubCategoryId() {
-        // given
-        LocalDateTime now = LocalDateTime.now();
-        Category mainCategory = categoryRepository.save(createCategory("전자기기", null));
-        Category subCategory = categoryRepository.save(createCategory("모바일", mainCategory));
-        User seller = userRepository.save(createUser("seller@test.com", "판매자"));
-
-        for (int i = 0; i < 50; i++) {
-            Auction auction = createAuction(subCategory, seller, now.plusMinutes(i), now.plusMinutes(i + 10), pending,
-                    now.minusMinutes(i));
-
-            auctionRepository.save(auction);
-            auctionImageRepository.save(createAuctionImage(auction, "image" + i));
-        }
-
-        Pageable pageable = PageRequest.of(0, 50);
-
-        // when
-        List<SubCategoryBestItem> topItems = auctionRepository.findTop50BySubCategoryId(subCategory.getId(), pageable);
-
-        // then
-        assertThat(topItems).hasSize(50);
-        assertThat(topItems.get(0).getAuctionId()).isNotNull();
-    }
+//    @DisplayName("서브카테고리 ID로 상위 50개 경매 조회")
+//    @Test
+//    void testFindTop50BySubCategoryId() {
+//        // given
+//        LocalDateTime now = LocalDateTime.now();
+//        Category mainCategory = categoryRepository.save(createCategory("전자기기", null));
+//        Category subCategory = categoryRepository.save(createCategory("모바일", mainCategory));
+//        User seller = userRepository.save(createUser("seller@test.com", "판매자"));
+//
+//        for (int i = 0; i < 50; i++) {
+//            Auction auction = createAuction(subCategory, seller, now.plusMinutes(i), now.plusMinutes(i + 10), pending,
+//                    now.minusMinutes(i));
+//
+//            auctionRepository.save(auction);
+//            auctionImageRepository.save(createAuctionImage(auction, "image" + i));
+//        }
+//
+//        Pageable pageable = PageRequest.of(0, 50);
+//
+//        // when
+//        List<SubCategoryBestItem> topItems = auctionRepository.findTop50BySubCategoryId(subCategory.getId(), pageable);
+//
+//        // then
+//        assertThat(topItems).hasSize(50);
+//        assertThat(topItems.get(0).getAuctionId()).isNotNull();
+//    }
 
     private Category createCategory(String name, Category parent) {
         return categoryRepository.save(

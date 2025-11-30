@@ -1,12 +1,12 @@
 package com.samyookgoo.palgoosam.search.unit_test;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.ThrowableAssert.catchThrowable;
 
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
 import com.samyookgoo.palgoosam.search.exception.SearchHistoryBadRequestException;
 import com.samyookgoo.palgoosam.search.repository.SearchHistoryRepository;
 import com.samyookgoo.palgoosam.search.service.SearchHistoryService;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -34,13 +34,11 @@ class SearchHistoryServiceTest {
         String emptyKeyword = "";
 
         //when
-        Throwable thrown = catchThrowable(() -> searchHistoryService.validateKeyword(emptyKeyword));
+        SearchHistoryBadRequestException exceptionWithEmptyKeyword = Assertions.assertThrows(
+                SearchHistoryBadRequestException.class, () -> searchHistoryService.validateKeyword(emptyKeyword));
 
         //then
-        assertThat(thrown).isInstanceOf(SearchHistoryBadRequestException.class)
-                .hasMessage(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST.getMessage())
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST);
+        assertThat(exceptionWithEmptyKeyword.getErrorCode()).isEqualTo(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST);
     }
 
     @Test
@@ -50,13 +48,11 @@ class SearchHistoryServiceTest {
         String nullKeyword = null;
 
         //when
-        Throwable thrown = catchThrowable(() -> searchHistoryService.validateKeyword(nullKeyword));
+        SearchHistoryBadRequestException exceptionWithNullKeyword = Assertions.assertThrows(
+                SearchHistoryBadRequestException.class, () -> searchHistoryService.validateKeyword(nullKeyword));
 
         //then
-        assertThat(thrown).isInstanceOf(SearchHistoryBadRequestException.class)
-                .hasMessage(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST.getMessage())
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST);
+        assertThat(exceptionWithNullKeyword.getErrorCode()).isEqualTo(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST);
     }
 
     @Test
@@ -68,27 +64,21 @@ class SearchHistoryServiceTest {
         String whiteSpaceKeyword3 = "\r";
 
         //when
-        Throwable exceptionWithWhiteSpaceKeyword1 = catchThrowable(
-                () -> searchHistoryService.validateKeyword(whiteSpaceKeyword1));
-        Throwable exceptionWithWhiteSpaceKeyword2 = catchThrowable(
-                () -> searchHistoryService.validateKeyword(whiteSpaceKeyword2));
-        Throwable exceptionWithWhiteSpaceKeyword3 = catchThrowable(
-                () -> searchHistoryService.validateKeyword(whiteSpaceKeyword3));
+        SearchHistoryBadRequestException exceptionWithWhiteSpaceKeyword1 = Assertions.assertThrows(
+                SearchHistoryBadRequestException.class, () -> searchHistoryService.validateKeyword(whiteSpaceKeyword1));
+
+        SearchHistoryBadRequestException exceptionWithWhiteSpaceKeyword2 = Assertions.assertThrows(
+                SearchHistoryBadRequestException.class, () -> searchHistoryService.validateKeyword(whiteSpaceKeyword2));
+
+        SearchHistoryBadRequestException exceptionWithWhiteSpaceKeyword3 = Assertions.assertThrows(
+                SearchHistoryBadRequestException.class, () -> searchHistoryService.validateKeyword(whiteSpaceKeyword3));
 
         //then
-        assertThat(exceptionWithWhiteSpaceKeyword1).isInstanceOf(SearchHistoryBadRequestException.class)
-                .hasMessage(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST.getMessage())
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST);
-
-        assertThat(exceptionWithWhiteSpaceKeyword2).isInstanceOf(SearchHistoryBadRequestException.class)
-                .hasMessage(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST.getMessage())
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST);
-
-        assertThat(exceptionWithWhiteSpaceKeyword3).isInstanceOf(SearchHistoryBadRequestException.class)
-                .hasMessage(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST.getMessage())
-                .extracting("errorCode")
-                .isEqualTo(ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST);
+        assertThat(exceptionWithWhiteSpaceKeyword1.getErrorCode()).isEqualTo(
+                ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST);
+        assertThat(exceptionWithWhiteSpaceKeyword2.getErrorCode()).isEqualTo(
+                ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST);
+        assertThat(exceptionWithWhiteSpaceKeyword3.getErrorCode()).isEqualTo(
+                ErrorCode.SEARCH_HISTORY_BLANK_BAD_REQUEST);
     }
 }

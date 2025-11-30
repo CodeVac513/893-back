@@ -42,8 +42,6 @@ public enum ErrorCode {
     BID_CANCEL_LIMIT_EXCEEDED(400, "BID_010", "입찰 취소는 1회까지만 가능합니다."),
     WINNING_BID_NOT_FOUND(400, "BID_011", "낙찰된 입찰이 존재하지 않습니다."),
     BID_EXCEEDS_MAXIMUM(400, "BID_012", "입찰 금액은 최대 10억까지 가능합니다."),
-    BID_LOCK_FAILED(409, "BID_013", "입찰 처리를 위한 락 획득에 실패했습니다."),
-    BID_INVALID_STATE(400, "BID_014", "입찰 재시도 중 인터럽트가 발생했습니다."),
 
     // FCM
     FCM_TOKEN_MISSING(404, "FCM_001", "토큰이 없습니다."),
@@ -68,9 +66,8 @@ public enum ErrorCode {
 
     // 배송지
     DELIVERY_ADDRESS_NOT_FOUND(404, "DELIVERY_ADDR_001", "해당 배송지 정보를 찾을 수 없습니다."),
-    DELIVERY_ADDRESS_ALREADY_DEFAULT_BAD_REQUEST(400, "DELIVERY_ADDR_002", "이미 기본 배송지입니다."),
 
-    INTERNAL_SERVER_ERROR(500, "SYS_001", "서버에 오류가 발생했습니다."),
+    INTERNAL_SERVER_ERROR(500, "SYS_001", "서버가 오류가 발생했습니다."),
     METHOD_NOT_ALLOWED(405, "SYS_002", "API는 열려있으나 메소드는 사용 불가합니다."),
     INVALID_INPUT_VALUE(400, "SYS_003", "적절하지 않은 요청 값입니다."),
     INVALID_TYPE_VALUE(400, "SYS_004", "요청 값의 타입이 잘못되었습니다."),

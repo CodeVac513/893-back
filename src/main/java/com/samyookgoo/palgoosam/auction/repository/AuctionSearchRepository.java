@@ -16,79 +16,54 @@ public class AuctionSearchRepository {
     private final NamedParameterJdbcTemplate jdbcTemplate;
 
     private static final String SEARCH_AUCTIONLIST_QUERY = """
-            SELECT
-                a.id,
-                a.title,
-                a.start_time,
-                a.end_time,
-                a.status,
-                a.base_price,
-                i.url as thumbnail_url,
-                COALESCE(
-                    bid_price.price,
-                    a.base_price
-                ) as current_price,
-                COALESCE(
-                    (
-                    SELECT
-                        COUNT(*)
-                    FROM
-                        user u
-                    WHERE
-                        EXISTS(
-                            SELECT 1 FROM bid b
-                            WHERE b.bidder_id = u.id
-                              AND b.auction_id = a.id
-                              AND b.is_deleted = false
-                        )), 0
-                ) as bidder_count,
-                (SELECT COUNT(*) FROM scrap s WHERE s.auction_id = a.id) as scrap_count
+            SELECT a.id, a.title, a.start_time, a.end_time, a.status, a.base_price, 
+                   COALESCE(i.url, 'test') as thumbnail_url,
+                   COALESCE(MAX(b.price), a.base_price) as current_price, 
+                   COUNT(DISTINCT(b.bidder_id)) as bidder_count,
+                   COUNT(DISTINCT(s.id)) as scrap_count
             FROM auction a
-            LEFT JOIN (
-                SELECT auction_id, price
-                FROM bid as b
-                WHERE b.is_deleted = false AND b.is_winning = true
-                  AND (:minPrice IS NULL OR b.price >= :minPrice)
-                  AND (:maxPrice IS NULL OR b.price <= :maxPrice)
-            ) bid_price ON a.id = bid_price.auction_id
-            JOIN auction_image i ON a.id = i.auction_id AND i.image_seq = 0
+            LEFT JOIN bid b ON a.id = b.auction_id AND b.is_deleted = false
+            LEFT JOIN scrap s ON a.id = s.auction_id
+            LEFT JOIN auction_image i ON a.id = i.auction_id AND i.image_seq = 0
             JOIN category c ON a.category_id = c.id
             WHERE
-                MATCH(a.title, a.description) AGAINST (:keyword IN NATURAL LANGUAGE MODE) AND
-                (:categoryId IS NULL OR a.category_id IN (
-                    WITH RECURSIVE CategoryHierarchy AS (
-                        SELECT id FROM category WHERE id = :categoryId
-                        UNION ALL
-                        SELECT c.id FROM category c
-                        JOIN CategoryHierarchy ch ON c.parent_id = ch.id
-                    )
-                    SELECT id FROM CategoryHierarchy
-                )) AND
-                (
-                    ((:isBrandNew IS NULL OR :isBrandNew = FALSE) AND
-                     (:isLikeNew IS NULL OR :isLikeNew = FALSE) AND
-                     (:isGentlyUsed IS NULL OR :isGentlyUsed = FALSE) AND
-                     (:isHeavilyUsed IS NULL OR :isHeavilyUsed = FALSE) AND
-                     (:isDamaged IS NULL OR :isDamaged = FALSE))
-                    OR
-                    ((:isBrandNew = TRUE AND a.item_condition = 'brand_new') OR
-                     (:isLikeNew = TRUE AND a.item_condition = 'like_new') OR
-                     (:isGentlyUsed = TRUE AND a.item_condition = 'gently_used') OR
-                     (:isHeavilyUsed = TRUE AND a.item_condition = 'heavily_used') OR
-                     (:isDamaged = TRUE AND a.item_condition = 'damaged'))
-                ) AND
-                (
-                    ((:isPending IS NULL OR :isPending = FALSE) AND
-                     (:isActive IS NULL OR :isActive = FALSE) AND
-                     (:isCompleted IS NULL OR :isCompleted = FALSE))
-                    OR
-                    ((:isPending = TRUE AND a.status = 'pending') OR
-                     (:isActive = TRUE AND a.status = 'active') OR
-                     (:isCompleted = TRUE AND a.status = 'completed'))
-                ) AND
-                (:minPrice IS NULL OR bid_price.price >= :minPrice OR a.base_price >= :minPrice) AND
-                (:maxPrice IS NULL OR bid_price.price <= :maxPrice OR a.base_price <= :maxPrice)
-            GROUP BY a.id, a.title, a.start_time, a.end_time, a.status, a.base_price, a.created_at, bid_price.price, i.url
+            MATCH(a.title, a.description) AGAINST (:keyword IN NATURAL LANGUAGE MODE) AND
+            (:categoryId IS NULL OR a.category_id IN (
+                WITH RECURSIVE CategoryHierarchy AS (
+                    SELECT id FROM category WHERE id = :categoryId
+                    UNION ALL
+                    SELECT c.id FROM category c
+                    JOIN CategoryHierarchy ch ON c.parent_id = ch.id
+                )
+                SELECT id FROM CategoryHierarchy
+            )) AND
+            (:maxPrice IS NULL OR a.base_price <= :maxPrice) AND
+            (
+                ((:isBrandNew IS NULL OR :isBrandNew = FALSE) AND
+                 (:isLikeNew IS NULL OR :isLikeNew = FALSE) AND
+                 (:isGentlyUsed IS NULL OR :isGentlyUsed = FALSE) AND
+                 (:isHeavilyUsed IS NULL OR :isHeavilyUsed = FALSE) AND
+                 (:isDamaged IS NULL OR :isDamaged = FALSE))
+                OR
+                ((:isBrandNew = TRUE AND a.item_condition = 'brand_new') OR
+                 (:isLikeNew = TRUE AND a.item_condition = 'like_new') OR
+                 (:isGentlyUsed = TRUE AND a.item_condition = 'gently_used') OR
+                 (:isHeavilyUsed = TRUE AND a.item_condition = 'heavily_used') OR
+                 (:isDamaged = TRUE AND a.item_condition = 'damaged'))
+            ) AND
+            (
+                ((:isPending IS NULL OR :isPending = FALSE) AND
+                 (:isActive IS NULL OR :isActive = FALSE) AND
+                 (:isCompleted IS NULL OR :isCompleted = FALSE))
+                OR
+                ((:isPending = TRUE AND a.status = 'pending') OR
+                 (:isActive = TRUE AND a.status = 'active') OR
+                 (:isCompleted = TRUE AND a.status = 'completed'))
+            )
+            GROUP BY a.id, a.title, a.start_time, a.end_time, a.status, a.base_price, a.created_at, i.url
+            HAVING
+                (:minPrice IS NULL OR COALESCE(MAX(b.price), a.base_price) >= :minPrice) AND
+                (:maxPrice IS NULL OR COALESCE(MAX(b.price), a.base_price) <= :maxPrice)
             """;
 
     private final RowMapper<AuctionSearchProjection> rowMapper = (rs, rowNum) ->
@@ -152,56 +127,52 @@ public class AuctionSearchRepository {
 
     public Long countAuctionsInList(AuctionSearchDto request) {
         String countQuery = """
-                SELECT
-                    COUNT(a.id)
+                SELECT COUNT(DISTINCT a.id)
                 FROM auction a
-                LEFT JOIN bid b ON a.id = b.auction_id AND b.is_deleted = false AND b.is_winning = true
+                LEFT JOIN bid b ON a.id = b.auction_id AND b.is_deleted = false
+                LEFT JOIN scrap s ON a.id = s.auction_id
+                LEFT JOIN auction_image i ON a.id = i.auction_id
                 JOIN category c ON a.category_id = c.id
                 WHERE
-                    MATCH(a.title, a.description) AGAINST (:keyword IN NATURAL LANGUAGE MODE) AND
-                    (:categoryId IS NULL OR a.category_id IN (
-                        WITH RECURSIVE CategoryHierarchy AS (
-                            SELECT id
-                            FROM category
-                            WHERE id = :categoryId
-                            UNION ALL
-                            SELECT c.id
-                            FROM category c
-                            JOIN CategoryHierarchy ch ON c.parent_id = ch.id
-                        )
-                        SELECT id FROM CategoryHierarchy
-                    )) AND
-                    (
-                        ((:isBrandNew IS NULL OR :isBrandNew = FALSE) AND
-                         (:isLikeNew IS NULL OR :isLikeNew = FALSE) AND
-                         (:isGentlyUsed IS NULL OR :isGentlyUsed = FALSE) AND
-                         (:isHeavilyUsed IS NULL OR :isHeavilyUsed = FALSE) AND
-                         (:isDamaged IS NULL OR :isDamaged = FALSE))
-                        OR
-                        ((:isBrandNew = TRUE AND a.item_condition = 'brand_new') OR
-                         (:isLikeNew = TRUE AND a.item_condition = 'like_new') OR
-                         (:isGentlyUsed = TRUE AND a.item_condition = 'gently_used') OR
-                         (:isHeavilyUsed = TRUE AND a.item_condition = 'heavily_used') OR
-                         (:isDamaged = TRUE AND a.item_condition = 'damaged'))
-                    ) AND
-                    (
-                        ((:isPending IS NULL OR :isPending = FALSE) AND
-                         (:isActive IS NULL OR :isActive = FALSE) AND
-                         (:isCompleted IS NULL OR :isCompleted = FALSE))
-                        OR
-                        ((:isPending = TRUE AND a.status = 'pending') OR
-                         (:isActive = TRUE AND a.status = 'active') OR
-                         (:isCompleted = TRUE AND a.status = 'completed'))
-                    ) AND
-                    (:minPrice IS NULL OR a.base_price >= :minPrice OR b.price >= :minPrice) AND
-                    (:maxPrice IS NULL OR a.base_price <= :maxPrice OR b.price <= :maxPrice)
+                MATCH(a.title, a.description) AGAINST (:keyword IN NATURAL LANGUAGE MODE) AND
+                (:categoryId IS NULL OR a.category_id IN (
+                    WITH RECURSIVE CategoryHierarchy AS (
+                        SELECT id FROM category WHERE id = :categoryId
+                        UNION ALL
+                        SELECT c.id FROM category c
+                        JOIN CategoryHierarchy ch ON c.parent_id = ch.id
+                    )
+                    SELECT id FROM CategoryHierarchy
+                )) AND
+                (:maxPrice IS NULL OR a.base_price <= :maxPrice) AND
+                (
+                    ((:isBrandNew IS NULL OR :isBrandNew = FALSE) AND
+                     (:isLikeNew IS NULL OR :isLikeNew = FALSE) AND
+                     (:isGentlyUsed IS NULL OR :isGentlyUsed = FALSE) AND
+                     (:isHeavilyUsed IS NULL OR :isHeavilyUsed = FALSE) AND
+                     (:isDamaged IS NULL OR :isDamaged = FALSE))
+                    OR
+                    ((:isBrandNew = TRUE AND a.item_condition = 'brand_new') OR
+                     (:isLikeNew = TRUE AND a.item_condition = 'like_new') OR
+                     (:isGentlyUsed = TRUE AND a.item_condition = 'gently_used') OR
+                     (:isHeavilyUsed = TRUE AND a.item_condition = 'heavily_used') OR
+                     (:isDamaged = TRUE AND a.item_condition = 'damaged'))
+                ) AND
+                (
+                    ((:isPending IS NULL OR :isPending = FALSE) AND
+                     (:isActive IS NULL OR :isActive = FALSE) AND
+                     (:isCompleted IS NULL OR :isCompleted = FALSE))
+                    OR
+                    ((:isPending = TRUE AND a.status = 'pending') OR
+                     (:isActive = TRUE AND a.status = 'active') OR
+                     (:isCompleted = TRUE AND a.status = 'completed'))
+                )
                 """;
 
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("keyword", request.getKeyword())
                 .addValue("categoryId", request.getCategoryId())
                 .addValue("maxPrice", request.getMaxPrice())
-                .addValue("minPrice", request.getMinPrice())
                 .addValue("isBrandNew", request.getIsBrandNew())
                 .addValue("isLikeNew", request.getIsLikeNew())
                 .addValue("isGentlyUsed", request.getIsGentlyUsed())

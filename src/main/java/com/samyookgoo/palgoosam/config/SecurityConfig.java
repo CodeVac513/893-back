@@ -26,15 +26,11 @@ public class SecurityConfig {
     private final OAuth2AuthenticationFailureHandler failureHandler;
     private final JwtTokenProvider jwtProvider;
 
-//    @Value("${frontend.url}")
-//    private String frontendUrl;
-
-    private final String healthCheck = "/api/health-check";
-
     @Bean
     @Order(1)
     public SecurityFilterChain publicChain(HttpSecurity http) throws Exception {
-        http.securityMatcher(healthCheck, "/swagger-ui/**", "/swagger/**", "/v3/api-docs/**")
+        http
+                .securityMatcher("/swagger-ui/**", "/swagger/**", "/v3/api-docs/**")
                 .csrf(AbstractHttpConfigurer::disable)
                 .authorizeHttpRequests(auth -> auth
                         .anyRequest().permitAll()
@@ -57,7 +53,6 @@ public class SecurityConfig {
                         // 프리플라이트 OPTIONS 전역 허용 , TODO 추후 삭제
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers(HttpMethod.GET,
-                                "/actuator/**",
                                 "/api/auctions",
                                 "/api/auctions/**",
                                 "/api/home/**",
@@ -81,14 +76,8 @@ public class SecurityConfig {
 
     @Bean
     public CorsConfigurationSource corsConfigSource() {
-        String frontendUrl = "https://www.palgoosam.store";
-
         CorsConfiguration cfg = new CorsConfiguration();
-        cfg.setAllowedOrigins(List.of(frontendUrl,
-                "https://893-front.vercel.app",
-                "https://*.palgoosam.store",
-                "https://palgoosam.store")
-        );
+        cfg.setAllowedOrigins(List.of("http://localhost:3000"));
         cfg.setAllowCredentials(true);
         cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"));
         cfg.setAllowedHeaders(List.of("*"));

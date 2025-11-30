@@ -10,7 +10,6 @@ import com.samyookgoo.palgoosam.auction.projection.RankingAuction;
 import com.samyookgoo.palgoosam.auction.projection.RecentAuction;
 import com.samyookgoo.palgoosam.auction.projection.SubCategoryBestItem;
 import com.samyookgoo.palgoosam.auction.projection.UpcomingAuction;
-import com.samyookgoo.palgoosam.bid.domain.BidForHighestPriceProjection;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +29,26 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
     List<Auction> findByParentCategoryIdAndStatus(@Param("parentId") Long parentId,
                                                   @Param("status") AuctionStatus status);
 
+    @Modifying
+    @Query("""
+                UPDATE Auction a
+                SET a.status = 'active'
+                WHERE a.status = 'pending'
+                  AND a.startTime <= :now
+            """)
+    int updateStatusToActive(@Param("now") LocalDateTime now);
+
+    @Modifying
+    @Query("""
+                UPDATE Auction a
+                SET a.status = 'completed'
+                WHERE a.status = 'active'
+                  AND a.endTime <= :now
+            """)
+    int updateStatusToCompleted(@Param("now") LocalDateTime now);
+
+    long countByStatus(AuctionStatus status);
+
     @Query("""
             SELECT 
                  a.id AS auctionId, 
@@ -40,7 +59,7 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
                  ai.url AS thumbnailUrl, 
                  a.startTime AS startTime
             FROM Auction a
-            JOIN AuctionImage ai ON ai.auction.id = a.id AND ai.imageSeq = 0
+            LEFT JOIN AuctionImage ai ON ai.auction.id = a.id AND ai.imageSeq = 0
             WHERE a.status = :status AND a.startTime > CURRENT_TIMESTAMP
             ORDER BY a.startTime ASC
             """)
@@ -55,7 +74,7 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
                 a.basePrice AS basePrice,
                 ai.url AS thumbnailUrl
             FROM Auction a
-            JOIN AuctionImage ai ON ai.auction.id = a.id AND ai.imageSeq = 0
+            LEFT JOIN AuctionImage ai ON ai.auction.id = a.id AND ai.imageSeq = 0
             WHERE a.status IN :statuses
             ORDER BY a.createdAt DESC
             """)
@@ -66,7 +85,7 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
             SELECT a.id AS auctionId, a.title AS title, a.description AS description,
                    a.itemCondition AS itemCondition, img.url AS thumbnailUrl
             FROM Auction a
-            JOIN AuctionImage img ON img.auction.id = a.id AND img.imageSeq = 0
+            LEFT JOIN AuctionImage img ON img.auction.id = a.id AND img.imageSeq = 0
             WHERE a.id IN :auctionIds
             """)
     List<RankingAuction> findRankingByIds(@Param("auctionIds") List<Long> auctionIds);
@@ -96,20 +115,19 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
                        img.url AS thumbnailUrl, a.startTime AS startTime
                 FROM Auction a
                 JOIN a.category c
-                JOIN c.parent sub
-                JOIN AuctionImage img ON img.auction.id = a.id AND img.imageSeq = 0
-                WHERE sub.id = :subCategoryId
-                    AND a.status IN ('pending', 'active')
+                JOIN c.parent mid
+                LEFT JOIN AuctionImage img ON img.auction.id = a.id AND img.imageSeq = 0
+                WHERE mid.id = :subCategoryId AND a.status IN ('pending', 'active')
                 ORDER BY (SELECT COUNT(s.id) FROM Scrap s WHERE s.auction.id = a.id) DESC, a.id ASC
             """)
-    List<SubCategoryBestItem> findTop50BySubCategoryId(@Param("subCategoryId") Long subCategoryId, Pageable pageable);
+    List<SubCategoryBestItem> findTop3BySubCategoryId(@Param("subCategoryId") Long subCategoryId, Pageable pageable);
 
 
     @Query(value = """
             SELECT a.id as auctionId, a.title as title, a.end_time as endTime, a.start_time as startTime, a.status as status, ai.url as mainImageUrl
             FROM auction as a
             LEFT JOIN auction_image as ai ON ai.auction_id = a.id AND ai.image_seq = 0
-            WHERE a.seller_id = :sellerId AND a.is_deleted = false
+            WHERE a.seller_id = :sellerId
             """, nativeQuery = true)
     List<AuctionForMyPageProjection> findAllAuctionProjectionBySellerId(@Param("sellerId") Long sellerId);
 
@@ -118,29 +136,8 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
             FROM auction as a
             JOIN scrap as s ON s.auction_id = a.id AND s.user_id = :userId
             LEFT JOIN auction_image as ai ON ai.auction_id = a.id AND ai.image_seq = 0
-            WHERE a.is_deleted = false
             """, nativeQuery = true)
     List<AuctionForMyPageProjection> findAllAuctionProjectionWithScrapByUserId(@Param("userId") Long userId);
-
-    @Query(value = """
-            SELECT COALESCE(MAX(b.price), 0) as bidHighestPrice, a.id as auctionId
-            FROM auction as a
-            LEFT JOIN bid as b ON b.auction_id = a.id AND b.is_deleted = false
-            JOIN user as u ON u.id = a.seller_id
-            WHERE u.id = :userId AND a.is_deleted = false
-            GROUP BY a.id
-            """, nativeQuery = true)
-    List<BidForHighestPriceProjection> findHighestBidProjectsBySellerId(@Param("userId") Long userId);
-
-    @Query(value = """
-            SELECT COALESCE(MAX(b.price), 0) as bidHighestPrice, a.id as auctionId
-            FROM auction as a
-            LEFT JOIN bid as b ON b.auction_id = a.id AND b.is_deleted = false
-            JOIN scrap as s ON s.auction_id = a.id AND s.user_id = :userId
-            WHERE a.is_deleted = false
-            GROUP BY a.id
-            """, nativeQuery = true)
-    List<BidForHighestPriceProjection> findHighestBidProjectsByScraperId(@Param("userId") Long id);
 
     @Query(value = """
             SELECT 
@@ -151,8 +148,4 @@ public interface AuctionRepository extends JpaRepository<Auction, Long> {
     DashboardProjection getDashboardCounts();
 
     List<AuctionStatus> status(AuctionStatus status);
-
-    List<Auction> findByStatusAndStartTimeBefore(AuctionStatus status, LocalDateTime startTimeBefore);
-
-    List<Auction> findByStatusAndEndTimeBefore(AuctionStatus status, LocalDateTime endTimeBefore);
 }

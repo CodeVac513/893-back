@@ -57,10 +57,6 @@ public class AuctionSearchRequestDto {
                 (this.page - 1) * this.limit);
     }
 
-    public Long getCategoryId() {
-        return this.checkCategoryId();
-    }
-
     private Long checkCategoryId() {
         if (this.detailCategoryId != null) {
             return this.detailCategoryId;

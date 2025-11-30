@@ -1,9 +1,6 @@
 package com.samyookgoo.palgoosam.auction.service;
 
-import co.elastic.clients.elasticsearch._types.FieldValue;
-import co.elastic.clients.elasticsearch._types.query_dsl.*;
 import com.samyookgoo.palgoosam.auction.constant.AuctionStatus;
-import com.samyookgoo.palgoosam.auction.constant.ItemCondition;
 import com.samyookgoo.palgoosam.auction.domain.Auction;
 import com.samyookgoo.palgoosam.auction.domain.AuctionImage;
 import com.samyookgoo.palgoosam.auction.domain.AuctionSearchProjection;
@@ -13,7 +10,14 @@ import com.samyookgoo.palgoosam.auction.dto.request.AuctionCreateRequest;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionImageRequest;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionSearchRequestDto;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionUpdateRequest;
-import com.samyookgoo.palgoosam.auction.dto.response.*;
+import com.samyookgoo.palgoosam.auction.dto.response.AuctionCreateResponse;
+import com.samyookgoo.palgoosam.auction.dto.response.AuctionDetailResponse;
+import com.samyookgoo.palgoosam.auction.dto.response.AuctionImageResponse;
+import com.samyookgoo.palgoosam.auction.dto.response.AuctionSearchResponseDto;
+import com.samyookgoo.palgoosam.auction.dto.response.AuctionUpdatePageResponse;
+import com.samyookgoo.palgoosam.auction.dto.response.AuctionUpdateResponse;
+import com.samyookgoo.palgoosam.auction.dto.response.CategoryResponse;
+import com.samyookgoo.palgoosam.auction.dto.response.RelatedAuctionResponse;
 import com.samyookgoo.palgoosam.auction.exception.AuctionCategoryException;
 import com.samyookgoo.palgoosam.auction.exception.AuctionForbiddenException;
 import com.samyookgoo.palgoosam.auction.exception.AuctionImageException;
@@ -21,6 +25,8 @@ import com.samyookgoo.palgoosam.auction.exception.AuctionInvalidStateException;
 import com.samyookgoo.palgoosam.auction.exception.AuctionNotFoundException;
 import com.samyookgoo.palgoosam.auction.exception.AuctionUpdateLockedException;
 import com.samyookgoo.palgoosam.auction.exception.CategoryNotFoundException;
+import com.samyookgoo.palgoosam.auction.file.FileStore;
+import com.samyookgoo.palgoosam.auction.file.ResultFileStore;
 import com.samyookgoo.palgoosam.auction.repository.AuctionImageRepository;
 import com.samyookgoo.palgoosam.auction.repository.AuctionRepository;
 import com.samyookgoo.palgoosam.auction.repository.AuctionSearchRepository;
@@ -30,19 +36,14 @@ import com.samyookgoo.palgoosam.auth.service.AuthService;
 import com.samyookgoo.palgoosam.bid.domain.Bid;
 import com.samyookgoo.palgoosam.bid.exception.BidNotFoundException;
 import com.samyookgoo.palgoosam.bid.repository.BidRepository;
-//import com.samyookgoo.palgoosam.common.s3.S3Service;
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
 import com.samyookgoo.palgoosam.payment.constant.PaymentStatus;
 import com.samyookgoo.palgoosam.payment.domain.Payment;
 import com.samyookgoo.palgoosam.payment.exception.PaymentNotFoundException;
 import com.samyookgoo.palgoosam.payment.repository.PaymentRepository;
-import com.samyookgoo.palgoosam.search.domain.AuctionSearchDocument;
-import com.samyookgoo.palgoosam.search.repository.AuctionSearchElasticsearchRepository;
 import com.samyookgoo.palgoosam.user.domain.User;
 import com.samyookgoo.palgoosam.user.exception.UserNotFoundException;
 import com.samyookgoo.palgoosam.user.repository.ScrapRepository;
-
-import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -53,19 +54,11 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
-
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-//import org.springframework.beans.factory.annotation.Value;
-//import org.springframework.data.redis.core.RedisTemplate;
-//import org.springframework.data.redis.core.StringRedisTemplate;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Sort;
-import org.springframework.data.elasticsearch.client.elc.NativeQuery;
-import org.springframework.data.elasticsearch.core.ElasticsearchOperations;
-import org.springframework.data.elasticsearch.core.SearchHits;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.multipart.MultipartFile;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -76,23 +69,14 @@ public class AuctionService {
     private final AuctionRepository auctionRepository;
     private final CategoryRepository categoryRepository;
     private final ScrapRepository scrapRepository;
+    private final FileStore fileStore;
     private final BidRepository bidRepository;
     private final AuthService authService;
     private final PaymentRepository paymentRepository;
     private final AuctionSearchRepository auctionSearchRepository;
-    private final AuctionSearchElasticsearchRepository auctionSearchElasticsearchRepository;
-    private final ElasticsearchOperations elasticsearchOperations;
-    //    private final S3Service s3Service;
-//    private final StringRedisTemplate stringRedisTemplate;
-
-    //    @Value("${cloud.aws.s3.bucket}")
-    private String bucket = "test";
-
-    //    @Value("${cloud.aws.region.static}")
-    private String region = "test";
 
     @Transactional
-    public AuctionCreateResponse createAuction(AuctionCreateRequest request) {
+    public AuctionCreateResponse createAuction(AuctionCreateRequest request, List<ResultFileStore> resultFileStores) {
         User user = getValidatedCurrentUser();
 
         Category category = getValidatedCategory(request.getCategory().getId());
@@ -108,12 +92,10 @@ public class AuctionService {
         Auction auction = Auction.from(request, category, user, startTime, endTime);
         auctionRepository.save(auction);
 
-//        setRedisStartTrigger(auction.getId(), auction.getStartTime());
-//        setRedisEndTrigger(auction.getId(), auction.getEndTime());
+        validateImageFiles(resultFileStores);
+        List<AuctionImageResponse> imageResponses = saveAuctionImages(resultFileStores, auction);
 
-        List<AuctionImageResponse> imageResponses = saveAuctionImages(request.getImages(), auction);
-
-        return AuctionCreateResponse.of(auction, imageResponses, category,
+        return AuctionCreateResponse.from(auction, imageResponses, category,
                 request.getStartDelay(), request.getDurationTime());
     }
 
@@ -125,16 +107,7 @@ public class AuctionService {
 
         List<AuctionImage> images = auctionImageRepository.findByAuctionId(auctionId);
         List<AuctionImageResponse> imageResponses = images.stream()
-                .map(image -> {
-                    try {
-                        return AuctionImageResponse.from(image.getId(), image.getStoreName(), image.getUrl(),
-                                image.getImageSeq());
-                    } catch (Exception e) {
-                        log.warn("Presigned URL 생성 실패: {}", image.getStoreName(), e);
-                        return AuctionImageResponse.from(image.getId(), image.getStoreName(), null,
-                                image.getImageSeq()); // or 빈 이미지 URL
-                    }
-                })
+                .map(AuctionImageResponse::from)
                 .collect(Collectors.toList());
 
         AuctionImageResponse mainImage = getMainImage(imageResponses);
@@ -189,10 +162,7 @@ public class AuctionService {
         List<AuctionImage> images = auctionImageRepository.findByAuctionId(auctionId);
 
         List<AuctionImageResponse> imageResponses = images.stream()
-                .map(image -> {
-                    return AuctionImageResponse.from(image.getId(), image.getStoreName(), image.getUrl(),
-                            image.getImageSeq());
-                })
+                .map(AuctionImageResponse::from)
                 .collect(Collectors.toList());
 
         AuctionImageResponse mainImage = imageResponses.stream()
@@ -216,7 +186,8 @@ public class AuctionService {
     }
 
     @Transactional
-    public AuctionUpdateResponse updateAuction(Long auctionId, AuctionUpdateRequest request) {
+    public AuctionUpdateResponse updateAuction(Long auctionId, AuctionUpdateRequest request,
+                                               List<MultipartFile> images) {
         Auction auction = getValidatedAuction(auctionId);
         User user = getValidatedCurrentUser();
 
@@ -286,56 +257,36 @@ public class AuctionService {
                 .filter(Objects::nonNull)
                 .collect(Collectors.toSet());
 
-        List<AuctionImageResponse> imageResponses = new ArrayList<>();
-
         List<AuctionImage> imagesToDelete = existingImages.stream()
                 .filter(img -> !requestedIds.contains(img.getId()))
                 .collect(Collectors.toList());
 
         for (AuctionImage image : imagesToDelete) {
-//            s3Service.deleteObject(image.getStoreName());
             auctionImageRepository.delete(image);
+            fileStore.delete(image.getStoreName());
         }
+
+        List<ResultFileStore> storedFiles = fileStore.storeFiles(images);
+        int newFileIndex = 0;
+
+        List<AuctionImageResponse> imageResponses = new ArrayList<>();
 
         for (AuctionImageRequest imageRequest : imageRequests) {
             Long imageId = imageRequest.getImageId();
             Integer imageSeq = imageRequest.getImageSeq();
-            String storeName = imageRequest.getStoreName();
 
             if (imageId != null && existingImageMap.containsKey(imageId)) {
                 AuctionImage existing = existingImageMap.get(imageId);
                 existing.setImageSeq(imageSeq);
-
-                String publicUrl = "https://" + bucket + ".s3." + region + ".amazonaws.com/" + existing.getStoreName();
-
-                imageResponses.add(AuctionImageResponse.from(
-                        imageId,
-                        storeName,
-                        publicUrl,
-                        imageSeq
-                ));
-
-            } else if (imageId == null && storeName != null) {
-                String publicUrl = "https://" + bucket + ".s3." + region + ".amazonaws.com/" + storeName;
-
-                AuctionImage newImage = AuctionImage.builder()
-                        .auction(auction)
-                        .storeName(storeName)
-                        .originalName(imageRequest.getOriginalName())
-                        .url(publicUrl)
-                        .imageSeq(imageSeq)
-                        .build();
-                auctionImageRepository.save(newImage);
-
-                imageResponses.add(AuctionImageResponse.from(imageId, storeName, publicUrl, imageSeq));
+                imageResponses.add(AuctionImageResponse.from(existing));
 
             } else {
-                throw new IllegalArgumentException("imageId와 storeName 중 하나는 반드시 있어야 합니다.");
+                ResultFileStore file = storedFiles.get(newFileIndex++);
+                AuctionImage newImage = ResultFileStore.toEntity(file, auction, imageSeq);
+                auctionImageRepository.save(newImage);
+                imageResponses.add(AuctionImageResponse.from(newImage));
             }
         }
-
-//        setRedisStartTrigger(auction.getId(), auction.getStartTime());
-//        setRedisEndTrigger(auction.getId(), auction.getEndTime());
 
         CategoryResponse categoryResponse = (request.getCategory() != null)
                 ? CategoryResponse.from(request.getCategory())
@@ -367,7 +318,6 @@ public class AuctionService {
 
         if (auction.getStartTime().minusMinutes(10).isAfter(now)) {
             softDeleteAuction(auctionId, auction);
-//            deleteRedisTriggers(auctionId);
             return;
         }
 
@@ -379,7 +329,6 @@ public class AuctionService {
 
             if (!hasValidBids || allCancelled) {
                 softDeleteAuction(auctionId, auction);
-                deleteRedisTriggers(auctionId);
                 return;
             }
 
@@ -396,7 +345,6 @@ public class AuctionService {
             }
 
             softDeleteAuction(auctionId, auction);
-            deleteRedisTriggers(auctionId);
             return;
         }
 
@@ -499,42 +447,26 @@ public class AuctionService {
                 .orElse(null);
     }
 
-    private List<AuctionImageResponse> saveAuctionImages(List<AuctionImageRequest> images, Auction auction) {
-        if (images == null || images.isEmpty()) {
-            throw new AuctionImageException(ErrorCode.AUCTION_MAIN_IMAGE_REQUIRED);
-        }
-
-        return IntStream.range(0, images.size())
-                .mapToObj(i -> {
-                    AuctionImageRequest info = images.get(i);
-                    return saveSingleAuctionImage(info.getStoreName(), info.getOriginalName(), auction, i);
-                })
+    private List<AuctionImageResponse> saveAuctionImages(List<ResultFileStore> files, Auction auction) {
+        return IntStream.range(0, files.size())
+                .mapToObj(i -> saveSingleAuctionImage(files.get(i), auction, i))
                 .toList();
     }
 
-    private AuctionImageResponse saveSingleAuctionImage(String imageKey, String originalName, Auction auction,
-                                                        int order) {
+    private AuctionImageResponse saveSingleAuctionImage(ResultFileStore file, Auction auction, int order) {
         try {
-            String publicUrl = "https://" + bucket + ".s3." + region + ".amazonaws.com/" + imageKey;
-
-            AuctionImage image = AuctionImage.builder()
-                    .auction(auction)
-                    .storeName(imageKey)
-                    .originalName(originalName)
-                    .imageSeq(order)
-                    .url(publicUrl)
-                    .build();
-
+            AuctionImage image = ResultFileStore.toEntity(file, auction, order);
             auctionImageRepository.save(image);
-
-            return AuctionImageResponse.from(
-                    image.getId(),
-                    image.getStoreName(),
-                    publicUrl,
-                    image.getImageSeq());
+            return AuctionImageResponse.from(image);
         } catch (Exception e) {
             log.error("이미지 저장 실패: {}", e.getMessage(), e);
             throw new AuctionImageException(ErrorCode.AUCTION_IMAGE_SAVE_FAILED);
+        }
+    }
+
+    private void validateImageFiles(List<ResultFileStore> files) {
+        if (files == null || files.isEmpty()) {
+            throw new AuctionImageException(ErrorCode.AUCTION_MAIN_IMAGE_REQUIRED);
         }
     }
 
@@ -547,7 +479,7 @@ public class AuctionService {
     }
 
     private void softDeleteAuctionImages(Long auctionId) {
-        List<AuctionImage> images = auctionImageRepository.findByAuctionIdAndIsDeletedFalse(auctionId);
+        List<AuctionImage> images = auctionImageRepository.findByAuctionId(auctionId);
 
         images.forEach(image -> {
             try {
@@ -555,7 +487,7 @@ public class AuctionService {
                     image.setIsDeleted(true);
                     auctionImageRepository.save(image);
                 } else {
-//                    s3Service.deleteObject(image.getStoreName());
+                    fileStore.delete(image.getStoreName());
                     auctionImageRepository.delete(image);
                 }
             } catch (Exception e) {
@@ -602,222 +534,5 @@ public class AuctionService {
                         .build()
         ).toList();
         return new AuctionSearchResponseDto(auctionCount, resultDtoList);
-    }
-
-    private void setRedisStartTrigger(Long auctionId, LocalDateTime startTime) {
-        String redisKey = "auction:trigger:start:" + auctionId;
-        long secondsUntilStart = Duration.between(LocalDateTime.now(), startTime).getSeconds();
-
-        if (secondsUntilStart > 0) {
-//            stringRedisTemplate.opsForValue().set(redisKey, "경매 시작", secondsUntilStart, TimeUnit.SECONDS);
-        }
-    }
-
-    private void setRedisEndTrigger(Long auctionId, LocalDateTime endTime) {
-        String redisKey = "auction:trigger:end:" + auctionId;
-        long secondsUntilEnd = Duration.between(LocalDateTime.now(), endTime).getSeconds();
-        if (secondsUntilEnd > 0) {
-//            stringRedisTemplate.opsForValue()
-//                    .set(redisKey, "경매 종료", secondsUntilEnd, TimeUnit.SECONDS);
-        }
-    }
-
-    private void deleteRedisTriggers(Long auctionId) {
-        String startKey = "auction:trigger:start:" + auctionId;
-        String endKey = "auction:trigger:end:" + auctionId;
-//        stringRedisTemplate.delete(startKey);
-//        stringRedisTemplate.delete(endKey);
-    }
-
-    public AuctionSearchDocumentResponseDto searchAuctions(AuctionSearchRequestDto auctionSearchRequestDto) {
-        Query multiMatchQuery = MultiMatchQuery.of(m -> m
-                .query(auctionSearchRequestDto.getKeyword())
-                .fields("title^2", "description^1")
-                .fuzziness("AUTO")
-        )._toQuery();
-
-        // term filter 쿼리
-        List<Query> filters = buildFilters(auctionSearchRequestDto);
-
-        Query boolQuery = BoolQuery.of(b -> b
-                .must(multiMatchQuery)
-                .filter(filters)
-        )._toQuery();
-
-        NativeQuery nativeQuery = NativeQuery.builder()
-                .withQuery(boolQuery)
-                // 정렬 - 정렬 조건은 5개
-                .withSort(buildSortOptions(auctionSearchRequestDto))
-                .withPageable(PageRequest.of(auctionSearchRequestDto.getPage() - 1, auctionSearchRequestDto.getLimit()))
-                .build();
-
-        SearchHits<AuctionSearchDocument> searchHits = this.elasticsearchOperations.search(
-                nativeQuery,
-                AuctionSearchDocument.class
-        );
-
-        NativeQuery countQuery = NativeQuery.builder()
-                .withQuery(boolQuery)
-                .build();
-
-        return new AuctionSearchDocumentResponseDto(elasticsearchOperations.count(countQuery, AuctionSearchDocument.class), searchHits.getSearchHits().stream()
-                .map(hit -> {
-                    AuctionSearchDocument auctionSearchDocument = hit.getContent();
-                    return auctionSearchDocument;
-                }).toList());
-    }
-
-    // 헬퍼 메서드를 조합해서 최종 filter 목록을 만듦
-    private List<Query> buildFilters(AuctionSearchRequestDto request) {
-        List<Query> filters = new ArrayList<>();
-
-        // 조건부 - 카테고리가 있으면 사용, 없으면 사용하지 않음.
-        Query categoryFilter = getCategoryIdFilter(request);
-        if (categoryFilter != null) filters.add(categoryFilter);
-
-        // 조건부 - 가격 범위가 있으면 사용, 없으면 사용하지 않음.
-        Query priceFilter = getPriceRangeFilter(request);
-        if (priceFilter != null) filters.add(priceFilter);
-
-        // 조건부 - 물건 상태
-        Query itemConditionFilter = getItemConditionFilter(request);
-        if (itemConditionFilter != null) filters.add(itemConditionFilter);
-
-        // 조건부 - 경매 상태
-        Query auctionStatusFilter = getAuctionStatusFilter(request);
-        if (auctionStatusFilter != null) filters.add(auctionStatusFilter);
-
-        return filters;
-    }
-
-    // 조건부 검색을 위한 헬퍼 메서드
-
-    private Query getCategoryIdFilter(AuctionSearchRequestDto request) {
-        Long categoryId = request.getCategoryId();
-
-        if (categoryId == null) return null;
-
-        Query categoryFilter = TermQuery.of(t -> t
-                .field("category_id")
-                .value(categoryId)
-        )._toQuery();
-
-        return categoryFilter;
-    }
-
-    private Query getPriceRangeFilter(AuctionSearchRequestDto request) {
-        Integer minPrice = request.getMinPrice();
-        Integer maxPrice = request.getMaxPrice();
-
-        if (minPrice == null && maxPrice == null) {
-            return null;
-        }
-
-        if (minPrice != null && maxPrice != null) {
-            Query priceRangeFilter = NumberRangeQuery.of(r -> r
-                    .field("current_price")
-                    .gte((double) (minPrice))
-                    .lte((double) (maxPrice))
-            )._toRangeQuery()._toQuery();
-            return priceRangeFilter;
-        }
-
-        if (minPrice != null) {
-            Query priceRangeFilter = NumberRangeQuery.of(r -> r
-                    .field("current_price")
-                    .gte((double) (minPrice))
-            )._toRangeQuery()._toQuery();
-            return priceRangeFilter;
-        }
-
-        Query priceRangeFilter = NumberRangeQuery.of(r -> r
-                .field("current_price")
-                .lte((double) (maxPrice))
-        )._toRangeQuery()._toQuery();
-        return priceRangeFilter;
-    }
-
-    private Query getItemConditionFilter(AuctionSearchRequestDto request) {
-        List<String> conditions = new ArrayList<>();
-        if (request.getIsBrandNew() != null && request.getIsBrandNew()) {
-            conditions.add(ItemCondition.brand_new.toString());
-        }
-        if (request.getIsLikeNew() != null && request.getIsLikeNew()) {
-            conditions.add(ItemCondition.like_new.toString());
-        }
-        if (request.getIsGentlyUsed() != null && request.getIsGentlyUsed()) {
-            conditions.add(ItemCondition.gently_used.toString());
-        }
-        if (request.getIsHeavilyUsed() != null && request.getIsHeavilyUsed()) {
-            conditions.add(ItemCondition.heavily_used.toString());
-        }
-        if (request.getIsDamaged() != null && request.getIsDamaged()) {
-            conditions.add(ItemCondition.damaged.toString());
-        }
-
-        if (conditions.isEmpty()) {
-            return null;
-        }
-
-
-        Query itemConditionFilter = TermsQuery.of(b -> b
-                .field("item_condition")
-                .terms(TermsQueryField.of(tf -> tf.value(
-                        conditions.stream()
-                                .map(FieldValue::of)
-                                .collect(Collectors.toList())
-                )))
-        )._toQuery();
-
-        return itemConditionFilter;
-    }
-
-    private Query getAuctionStatusFilter(AuctionSearchRequestDto request) {
-        List<String> conditions = new ArrayList<>();
-        if (request.getIsPending() != null && request.getIsPending()) {
-            conditions.add(AuctionStatus.pending.toString());
-        }
-        if (request.getIsActive() != null && request.getIsActive()) {
-            conditions.add(AuctionStatus.active.toString());
-        }
-        if (request.getIsCompleted() != null && request.getIsCompleted()) {
-            conditions.add(AuctionStatus.completed.toString());
-        }
-
-        if (conditions.isEmpty()) {
-            return null;
-        }
-
-        Query auctionStatusFilter = TermsQuery.of(b -> b
-                .field("status")
-                .terms(TermsQueryField.of(tf -> tf.value(
-                        conditions.stream()
-                                .map(FieldValue::of)
-                                .collect(Collectors.toList())
-                )))
-        )._toQuery();
-
-        return auctionStatusFilter;
-    }
-
-    private Sort buildSortOptions(AuctionSearchRequestDto request) {
-        String sortBy = request.getSortBy();
-
-        if (sortBy == null) {
-            return Sort.by(Sort.Direction.DESC, "created_at");
-        }
-
-        switch (sortBy) {
-            case "price_asc":
-                return Sort.by(Sort.Direction.ASC, "current_price");
-            case "price_desc":
-                return Sort.by(Sort.Direction.DESC, "current_price");
-            case "scrap_count_desc":
-                return Sort.by(Sort.Direction.DESC, "scrap_count");
-            case "bidder_count_desc":
-                return Sort.by(Sort.Direction.DESC, "bidder_count");
-            default:
-                return Sort.by(Sort.Direction.DESC, "created_at");
-        }
     }
 }

@@ -1,6 +1,7 @@
 package com.samyookgoo.palgoosam.bid.controller;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -14,26 +15,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.samyookgoo.palgoosam.auth.service.AuthService;
 import com.samyookgoo.palgoosam.bid.controller.request.BidRequest;
 import com.samyookgoo.palgoosam.bid.controller.response.BidOverviewResponse;
+import com.samyookgoo.palgoosam.bid.controller.response.BidResultResponse;
 import com.samyookgoo.palgoosam.bid.service.BidService;
 import com.samyookgoo.palgoosam.user.domain.User;
-import com.samyookgoo.palgoosam.user.exception.UserUnauthorizedException;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.context.TestConfiguration;
-import org.springframework.context.annotation.Bean;
-import org.springframework.context.annotation.Import;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
-@ActiveProfiles("test")
 @WebMvcTest(controllers = BidController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import(BidControllerTest.TestConfig.class)
 class BidControllerTest {
 
     @Autowired
@@ -42,24 +37,11 @@ class BidControllerTest {
     @Autowired
     protected ObjectMapper objectMapper;
 
-    @Autowired
+    @MockBean
     private BidService bidService;
 
-    @Autowired
+    @MockBean
     private AuthService authService;
-
-    @TestConfiguration
-    static class TestConfig {
-        @Bean
-        public BidService bidService() {
-            return Mockito.mock(BidService.class);
-        }
-
-        @Bean
-        public AuthService authService() {
-            return Mockito.mock(AuthService.class);
-        }
-    }
 
     @DisplayName("입찰 내역을 조회한다.")
     @Test
@@ -91,7 +73,10 @@ class BidControllerTest {
                 .price(10000)
                 .build();
 
+        BidResultResponse response = BidResultResponse.builder().build();
+
         given(authService.getCurrentUser()).willReturn(mockUser);
+        given(bidService.placeBid(anyLong(), any(), anyInt())).willReturn(response);
 
         // when & then
         mockMvc.perform(post("/api/auctions/{auctionId}/bids", auctionId)
@@ -100,7 +85,8 @@ class BidControllerTest {
                 .andDo(print())
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.code").value("200"))
-                .andExpect(jsonPath("$.message").value("success"));
+                .andExpect(jsonPath("$.message").value("success"))
+                .andExpect(jsonPath("$.data").isNotEmpty());
     }
 
     @DisplayName("비회원 유저는 입찰이 불가하다.")
@@ -113,16 +99,19 @@ class BidControllerTest {
                 .price(10000)
                 .build();
 
-        given(authService.getAuthorizedUser(null)).willThrow(new UserUnauthorizedException());
+        BidResultResponse response = BidResultResponse.builder().build();
+
+        given(authService.getCurrentUser()).willReturn(null);
+        given(bidService.placeBid(anyLong(), any(), anyInt())).willReturn(response);
 
         // when & then
         mockMvc.perform(post("/api/auctions/{auctionId}/bids", auctionId)
                         .content(objectMapper.writeValueAsString(request))
                         .contentType(MediaType.APPLICATION_JSON))
                 .andDo(print())
-                .andExpect(status().is4xxClientError())
-                .andExpect(jsonPath("$.code").value("A_001"))
-                .andExpect(jsonPath("$.message").value("클라이언트 인증 부재, 로그인 해주세요."));
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("U_001"))
+                .andExpect(jsonPath("$.message").value("해당 유저를 찾을 수 없습니다."));
     }
 
     @DisplayName("입찰을 취소한다.")

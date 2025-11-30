@@ -9,16 +9,14 @@ import com.samyookgoo.palgoosam.user.repository.UserRepository;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
-import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.test.context.ActiveProfiles;
 
-@SpringBootTest
+@DataJpaTest
 @ActiveProfiles("test")
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @DisplayName("SearchHistoryRepository 유닛 테스트")
@@ -30,31 +28,19 @@ class SearchHistoryRepositoryTest {
     @Autowired
     private UserRepository userRepository;
 
-    private User currentUser;
-
-    @BeforeEach
-    void setUp() {
-        currentUser = createTestUser("currentUser", "currentUser@test.com");
-    }
-
-    @AfterEach
-    void tearDown() {
-        searchHistoryRepository.deleteAllInBatch();
-        userRepository.deleteAllInBatch();
-    }
-
     @Test
     @DisplayName("회원인 사용자의 검색 내역을 저장한다.")
     public void save_ValidSearchHistory_SavesSuccessfully() {
         //given
-        SearchHistory searchHistory = createSearchHistory("test", currentUser);
+        User testUser = createTestUser("tester", "test@test.com");
+        SearchHistory searchHistory = createSearchHistory("test", testUser);
 
         //when
         SearchHistory saved = searchHistoryRepository.save(searchHistory);
 
         //then
         assertThat(saved.getSearchCount()).isEqualTo(searchHistory.getSearchCount());
-        assertThat(saved.getUser().getId()).isEqualTo(currentUser.getId());
+        assertThat(saved.getUser()).isEqualTo(testUser);
         assertThat(saved.getIsDeleted()).isEqualTo(searchHistory.getIsDeleted());
         assertThat(saved.getKeyword()).isEqualTo(searchHistory.getKeyword());
     }
@@ -63,14 +49,16 @@ class SearchHistoryRepositoryTest {
     @DisplayName("회원은 10개 이하의 검색 기록을 볼 수 있다.")
     public void findAllByUserId_OverTenRecords_ReturnsLatestTen() {
         //given
+        User testUser = createTestUser("tester2", "test2@test.com");
         List<SearchHistory> searchHistoryList = new ArrayList<>();
         for (int i = 0; i < 11; i++) {
-            SearchHistory searchHistory = createSearchHistory("test" + i, currentUser);
+            SearchHistory searchHistory = createSearchHistory("test" + i, testUser);
             searchHistoryList.add(searchHistory);
         }
+        searchHistoryRepository.saveAll(searchHistoryList);
 
         //when
-        List<SearchHistory> foundSearchHistoryList = searchHistoryRepository.findAllByUserId(currentUser.getId());
+        List<SearchHistory> foundSearchHistoryList = searchHistoryRepository.findAllByUserId(testUser.getId());
 
         //then
         assertThat(foundSearchHistoryList.size()).isEqualTo(10);
@@ -85,28 +73,30 @@ class SearchHistoryRepositoryTest {
     @DisplayName("사용자가 검색어를 입력하면 기존 검색 기록을 확인할 수 있다.")
     public void findByKeywordAndUserId_ExistingKeyword_ReturnsSearchHistory() {
         //given
+        User testUser = createTestUser("tester", "test@test.com");
         String existedKeyword = "test1";
-        SearchHistory searchHistory = createSearchHistory(existedKeyword, currentUser);
+        SearchHistory searchHistory = createSearchHistory(existedKeyword, testUser);
 
         searchHistoryRepository.save(searchHistory);
 
         //when
-        SearchHistory existingSearch = searchHistoryRepository.findByKeywordAndUserId(existedKeyword,
-                currentUser.getId()).orElseThrow();
+        Optional<SearchHistory> existingSearch = searchHistoryRepository.findByKeywordAndUserId(existedKeyword,
+                testUser.getId());
 
         //then
-        assertThat(existingSearch.getKeyword()).isEqualTo(existedKeyword);
+        assertThat(existingSearch.get().getKeyword()).isEqualTo(existedKeyword);
     }
 
     @Test
     @DisplayName("기존 검색 기록이 없다면 아무 것도 확인할 수 없다.")
     public void findByKeywordAndUserId_NonExistingKeyword_ReturnsEmpty() {
         //given
+        User testUser = createTestUser("tester", "test@test.com");
         String notExistedKeyword = "test";
 
         //when
         Optional<SearchHistory> nullSearch = searchHistoryRepository.findByKeywordAndUserId(notExistedKeyword,
-                currentUser.getId());
+                testUser.getId());
 
         //then
         assertThat(nullSearch.isEmpty()).isTrue();
@@ -123,14 +113,12 @@ class SearchHistoryRepositoryTest {
     }
 
     private SearchHistory createSearchHistory(String keyword, User user) {
-        SearchHistory searchHistory = SearchHistory.builder()
+        return SearchHistory.builder()
                 .keyword(keyword)
                 .isDeleted(false)
                 .user(user)
                 .searchCount(1L)
                 .build();
-
-        return searchHistoryRepository.save(searchHistory);
     }
 
 

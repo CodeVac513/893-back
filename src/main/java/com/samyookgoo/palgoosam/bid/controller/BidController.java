@@ -7,6 +7,7 @@ import com.samyookgoo.palgoosam.bid.api_docs.PlaceBidApi;
 import com.samyookgoo.palgoosam.bid.controller.request.BidRequest;
 import com.samyookgoo.palgoosam.bid.controller.response.BaseResponse;
 import com.samyookgoo.palgoosam.bid.controller.response.BidOverviewResponse;
+import com.samyookgoo.palgoosam.bid.controller.response.BidResultResponse;
 import com.samyookgoo.palgoosam.bid.service.BidService;
 import com.samyookgoo.palgoosam.user.domain.User;
 import com.samyookgoo.palgoosam.user.exception.UserNotFoundException;
@@ -15,6 +16,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.time.LocalDateTime;
 import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -46,7 +48,7 @@ public class BidController {
 
     @PlaceBidApi
     @PostMapping("/{auctionId}/bids")
-    public BaseResponse<String> place(
+    public BaseResponse<BidResultResponse> place(
             @Parameter(name = "auctionId", description = "입찰할 경매 ID", required = true)
             @PathVariable Long auctionId,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(
@@ -55,12 +57,17 @@ public class BidController {
             )
             @Valid @RequestBody BidRequest request
     ) {
-        User user = authService.getAuthorizedUser(authService.getCurrentUser());
-        bidService.placeBidWithLock(auctionId, user, request.getPrice());
-        return BaseResponse.success("입찰 요청 완료");
+        User user = authService.getCurrentUser();
+        if (user == null) {
+            throw new UserNotFoundException();
+        }
+
+        BidResultResponse response = bidService.placeBid(auctionId, user, request.getPrice());
+        return BaseResponse.success(response);
     }
 
     @CancelBidApi
+    @CrossOrigin(origins = "http://localhost:3000")
     @PatchMapping("/{auctionId}/bids/{bidId}")
     public BaseResponse<String> cancel(
             @Parameter(name = "auctionId", description = "경매 ID", required = true)

@@ -18,6 +18,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -31,6 +32,7 @@ public class UserController {
     private final AuthService authService;
 
     @GetUserInfoApi
+    @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
     @GetMapping("/user-info")
     public ResponseEntity<BaseResponse<UserInfoResponseDto>> getUserInfo() {
         User currentUser = authService.getAuthorizedUser(authService.getCurrentUser());
@@ -40,6 +42,7 @@ public class UserController {
     }
 
     @GetUserBidsApi
+    @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
     @GetMapping("/bids")
     public ResponseEntity<BaseResponse<List<UserBidsResponseDto>>> getUserBids() {
         User currentUser = authService.getAuthorizedUser(authService.getCurrentUser());
@@ -49,6 +52,7 @@ public class UserController {
     }
 
     @GetUserAuctionsApi
+    @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
     @GetMapping("/auctions")
     public ResponseEntity<BaseResponse<List<UserAuctionsResponseDto>>> getUserAuctions() {
         User currentUser = authService.getAuthorizedUser(authService.getCurrentUser());
@@ -58,6 +62,7 @@ public class UserController {
     }
 
     @GetUserScrapsApi
+    @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
     @GetMapping("/scraps")
     public ResponseEntity<BaseResponse<List<UserAuctionsResponseDto>>> getUserScraps() {
         User currentUser = authService.getAuthorizedUser(authService.getCurrentUser());
@@ -67,6 +72,7 @@ public class UserController {
     }
 
     @GetUserPaymentsApi
+    @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
     @GetMapping("/payments")
     public ResponseEntity<BaseResponse<List<UserPaymentsResponseDto>>> getUserPayments() {
         User currentUser = authService.getAuthorizedUser(authService.getCurrentUser());

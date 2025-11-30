@@ -17,6 +17,7 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -35,6 +36,7 @@ public class DeliveryAddressController {
     private final AuthService authService;
 
     @GetUserDeliveryAddressesApi
+    @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
     @GetMapping("/addresses")
     public ResponseEntity<BaseResponse<List<DeliveryAddressResponseDto>>> getUserDeliveryAddresses() {
         User currentUser = authService.getAuthorizedUser(authService.getCurrentUser());
@@ -45,6 +47,7 @@ public class DeliveryAddressController {
     }
 
     @DeleteUserDeliveryAddressApi
+    @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
     @DeleteMapping("addresses/{id}")
     public ResponseEntity<BaseResponse<Void>> deleteUserDeliveryAddress(
             @Parameter(name = "id", description = "삭제할 배송지 ID", required = true)
@@ -57,6 +60,7 @@ public class DeliveryAddressController {
     }
 
     @PostUserDeliveryAddress
+    @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
     @PostMapping("/addresses")
     public ResponseEntity<BaseResponse<Void>> postUserDeliveryAddress(
             @io.swagger.v3.oas.annotations.parameters.RequestBody(description = "배송지 등록 요청 정보", required = true)
@@ -69,6 +73,7 @@ public class DeliveryAddressController {
     }
 
     @ModifyDefaultDeliveryAddress
+    @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
     @PatchMapping("/addresses/{id}/default")
     public ResponseEntity<BaseResponse<Void>> modifyDefaultDeliveryAddress(
             @Parameter(name = "id", description = "기본 설정할 배송지 ID", required = true)

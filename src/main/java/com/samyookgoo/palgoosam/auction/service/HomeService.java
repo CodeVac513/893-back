@@ -63,8 +63,15 @@ public class HomeService {
         List<RecentAuction> recentAuctions = auctionRepository.findTop6RecentAuctions(statuses, PageRequest.of(0, 6));
 
         return recentAuctions.stream()
-                .map(RecentAuctionResponse::from)
-                .toList();
+                .map(r -> RecentAuctionResponse.builder()
+                        .auctionId(r.getAuctionId())
+                        .title(r.getTitle())
+                        .description(r.getDescription())
+                        .status(r.getStatus())
+                        .basePrice(r.getBasePrice())
+                        .thumbnailUrl(r.getThumbnailUrl())
+                        .build())
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
@@ -75,17 +82,25 @@ public class HomeService {
         Map<Long, Integer> scrapCountMap = getScrapCounts(upcomingAuctions);
 
         return upcomingAuctions.stream()
-                .map(u -> UpcomingAuctionResponse.from(
-                        u,
-                        scrapCountMap.getOrDefault(u.getAuctionId(), 0),
-                        formatLeftTime(u.getStartTime())
-                ))
-                .toList();
+                .map(u -> UpcomingAuctionResponse.builder()
+                        .auctionId(u.getAuctionId())
+                        .title(u.getTitle())
+                        .description(u.getDescription())
+                        .itemCondition(u.getItemCondition())
+                        .basePrice(u.getBasePrice())
+                        .scrapCount(scrapCountMap.getOrDefault(u.getAuctionId(), 0))
+                        .thumbnailUrl(u.getThumbnailUrl())
+                        .leftTime(formatLeftTime(u.getStartTime()))
+                        .build())
+                .collect(Collectors.toList());
     }
 
     @Transactional(readOnly = true)
     public List<TopBidResponse> getTopBid() {
-        List<TopWinningBid> topWinningBidList = bidRepository.findTop5WinningBids();
+        LocalDateTime sevenDaysAgo = LocalDateTime.now().minusDays(7);
+        Pageable topFive = PageRequest.of(0, 5);
+
+        List<TopWinningBid> topWinningBidList = bidRepository.findTop5WinningBids(sevenDaysAgo, topFive);
 
         List<Long> auctionIds = topWinningBidList.stream()
                 .map(TopWinningBid::getAuctionId)
@@ -100,12 +115,16 @@ public class HomeService {
         AtomicInteger rank = new AtomicInteger(1);
 
         return topWinningBidList.stream()
-                .map(t -> TopBidResponse.from(
-                        t,
-                        maskName(t.getBuyer()),
-                        bidCountMap.getOrDefault(t.getAuctionId(), 0),
-                        rank.getAndIncrement()
-                ))
+                .map(t -> TopBidResponse.builder()
+                        .auctionId(t.getAuctionId())
+                        .title(t.getTitle())
+                        .basePrice(t.getBasePrice())
+                        .itemPrice(t.getItemPrice())
+                        .thumbnailUrl(t.getThumbnailUrl())
+                        .buyer(maskName(t.getBuyer()))
+                        .bidCount(bidCountMap.getOrDefault(t.getAuctionId(), 0))
+                        .rankNum(rank.getAndIncrement())
+                        .build())
                 .toList();
     }
 
@@ -128,11 +147,15 @@ public class HomeService {
         return bidCounts.stream()
                 .map(b -> {
                     RankingAuction r = rankingMap.get(b.getAuctionId());
-                    return ActiveRankingResponse.from(
-                            r,
-                            b.getBidCount(),
-                            rank.getAndIncrement()
-                    );
+                    return ActiveRankingResponse.builder()
+                            .auctionId(r.getAuctionId())
+                            .title(r.getTitle())
+                            .description(r.getDescription())
+                            .itemCondition(r.getItemCondition())
+                            .thumbnailUrl(r.getThumbnailUrl())
+                            .bidCount(b.getBidCount())
+                            .rankNum(rank.getAndIncrement())
+                            .build();
                 })
                 .toList();
     }
@@ -156,11 +179,15 @@ public class HomeService {
         return scrapCounts.stream()
                 .map(b -> {
                     RankingAuction r = rankingMap.get(b.getAuctionId());
-                    return PendingRankingResponse.from(
-                            r,
-                            b.getScrapCount(),
-                            rank.getAndIncrement()
-                    );
+                    return PendingRankingResponse.builder()
+                            .auctionId(r.getAuctionId())
+                            .title(r.getTitle())
+                            .description(r.getDescription())
+                            .itemCondition(r.getItemCondition())
+                            .thumbnailUrl(r.getThumbnailUrl())
+                            .scrapCount(b.getScrapCount())
+                            .rankNum(rank.getAndIncrement())
+                            .build();
                 })
                 .toList();
     }
@@ -171,8 +198,8 @@ public class HomeService {
 
         return subCategoryList.stream()
                 .map(sub -> {
-                    List<SubCategoryBestItem> itemProjections = auctionRepository.findTop50BySubCategoryId(sub.getId(),
-                            PageRequest.of(0, 50));
+                    List<SubCategoryBestItem> itemProjections = auctionRepository.findTop3BySubCategoryId(sub.getId(),
+                            PageRequest.of(0, 3));
                     List<AuctionScrapCount> scrapCounts = scrapRepository.countGroupedByAuctionIds(
                             itemProjections.stream().map(SubCategoryBestItem::getAuctionId).toList()
                     );
@@ -182,13 +209,16 @@ public class HomeService {
 
                     AtomicInteger rank = new AtomicInteger(1);
                     List<BestItemResponse> items = itemProjections.stream()
-                            .map(p -> BestItemResponse.from(
-                                    p,
-                                    isAuctionImminent(p.getStartTime()),
-                                    scrapMap.getOrDefault(p.getAuctionId(), 0),
-                                    rank.getAndIncrement()
-
-                            ))
+                            .map(p -> BestItemResponse.builder()
+                                    .auctionId(p.getAuctionId())
+                                    .title(p.getTitle())
+                                    .status(p.getStatus())
+                                    .itemCondition(p.getItemCondition())
+                                    .thumbnailUrl(p.getThumbnailUrl())
+                                    .scrapCount(scrapMap.getOrDefault(p.getAuctionId(), 0))
+                                    .isAuctionImminent(isAuctionImminent(p.getStartTime()))
+                                    .rankNum(rank.getAndIncrement())
+                                    .build())
                             .toList();
 
                     return SubCategoryBestItemResponse.builder()

@@ -90,39 +90,13 @@ class SseServiceTest {
         assertThat(getEmittersList(auctionId)).doesNotContain(faultyEmitter);
     }
 
-    @DisplayName("subscribePersonal 호출 시 emitter 가 등록되고 connect 이벤트가 전송된다.")
-    @Test
-    void registersUserEmitterAndSendsConnectEvent() {
-        // given
-        Long userId = 42L;
-
-        // when
-        SseEmitter emitter = sseService.subscribePersonal(userId);
-
-        // then
-        assertThat(emitter).isNotNull();
-        assertThat(getUserEmitter(userId)).isEqualTo(emitter);
-    }
-
     @SuppressWarnings("unchecked")
     private List<SseEmitter> getEmittersList(Long auctionId) {
         try {
-            var emittersField = SseService.class.getDeclaredField("bidEmitters");
+            var emittersField = SseService.class.getDeclaredField("emitters");
             emittersField.setAccessible(true);
             var emittersMap = (Map<Long, List<SseEmitter>>) emittersField.get(sseService);
             return emittersMap.computeIfAbsent(auctionId, id -> new CopyOnWriteArrayList<>());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private SseEmitter getUserEmitter(Long userId) {
-        try {
-            var emittersField = SseService.class.getDeclaredField("userEmitters");
-            emittersField.setAccessible(true);
-            var emittersMap = (Map<Long, SseEmitter>) emittersField.get(sseService);
-            return emittersMap.get(userId);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

@@ -25,7 +25,7 @@ class UserResponseDtoTest {
     //UserAuctionResponseDto 정적 팩토리 메서드
     @Test
     @DisplayName("UserAuctionResponseDto를 정적 팩토리 메서드를 통해 생성할 수 있다.")
-    public void createUserAuctionsResponseDto_ValidProjectionAndHighestBid_ReturnsCorrectDto() {
+    public void Given_AuctionForMyPageProjectionAndHighestBid_When_CallOfMethod_Then_ReturnResponseDto() {
         //given
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime endAt = now.plusMinutes(10);
@@ -55,7 +55,7 @@ class UserResponseDtoTest {
     //UserBidsResponseDto 정적 팩토리 메서드
     @Test
     @DisplayName("UserBidsResponseDto를 정적 팩토리 메서드를 통해 생성할 수 있다.")
-    public void createUserBidsResponseDto_ValidProjectionAndHighestBid_ReturnsCorrectDto() {
+    public void Given_BidForMyPageProjectionAndHighestBid_When_CallOfMethod_Then_ReturnResponseDto() {
         //given
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime endAt = now.plusMinutes(10);
@@ -91,7 +91,7 @@ class UserResponseDtoTest {
     //UserBidsResponseDto 정적 팩토리 메서드
     @Test
     @DisplayName("UserInfoResponseDto를 정적 팩토리 메서드를 통해 생성할 수 있다.")
-    public void createUserInfoResponseDto_ValidUser_ReturnsCorrectDto() {
+    public void Given_User_When_CallFromMethod_Then_ReturnResponseDto() {
         //given
         User user = User.builder()
                 .id(1L)
@@ -115,8 +115,10 @@ class UserResponseDtoTest {
     //UserBidsResponseDto 정적 팩토리 메서드
     @Test
     @DisplayName("UserPaymentsResponseDto를 정적 팩토리 메서드를 통해 생성할 수 있다.")
-    public void createUserPaymentsResponseDto_ValidProjection_ReturnsCorrectDto() {
+    public void Given_PaymentForMyPageProjection_When_CallOfMethod_Then_ReturnResponseDto() {
         //given
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime endAt = now.plusMinutes(10);
 
         PaymentForMyPageProjection projection = mock(PaymentForMyPageProjection.class);
         when(projection.getAuctionId()).thenReturn(1L);
