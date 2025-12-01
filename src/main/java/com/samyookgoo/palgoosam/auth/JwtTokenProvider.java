@@ -138,4 +138,28 @@ public class JwtTokenProvider {
     public long getRefreshValidityMs() {
         return refreshValidityMs;
     }
+
+    public String generateNeverExpireToken(String providerId) {  // userId 대신 providerId
+        Date now = new Date();
+        Date validity = new Date(now.getTime() + (365L * 24 * 60 * 60 * 1000)); // 1년
+
+        return Jwts.builder()
+                .setSubject(providerId)  // 기존 토큰과 동일한 구조
+                .setIssuedAt(now)
+                .setExpiration(validity)
+                .signWith(accessKey, SignatureAlgorithm.HS256)  // key → accessKey
+                .compact();
+    }
+
+    public String generateNeverExpireRefreshToken(String providerId) {
+        Date now = new Date();
+        Date validity = new Date(now.getTime() + (365L * 24 * 60 * 60 * 1000)); // 1년
+
+        return Jwts.builder()
+                .setSubject(providerId)
+                .setIssuedAt(now)
+                .setExpiration(validity)
+                .signWith(refreshKey, SignatureAlgorithm.HS256)  // ⭐ accessKey가 아닌 refreshKey
+                .compact();
+    }
 }

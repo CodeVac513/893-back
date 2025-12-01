@@ -1,5 +1,6 @@
 package com.samyookgoo.palgoosam.user.controller;
 
+import com.samyookgoo.palgoosam.auth.JwtTokenProvider;
 import com.samyookgoo.palgoosam.auth.service.AuthService;
 import com.samyookgoo.palgoosam.common.response.BaseResponse;
 import com.samyookgoo.palgoosam.user.api_docs.GetUserAuctionsApi;
@@ -12,16 +13,20 @@ import com.samyookgoo.palgoosam.user.dto.UserAuctionsResponseDto;
 import com.samyookgoo.palgoosam.user.dto.UserBidsResponseDto;
 import com.samyookgoo.palgoosam.user.dto.UserInfoResponseDto;
 import com.samyookgoo.palgoosam.user.dto.UserPaymentsResponseDto;
+import com.samyookgoo.palgoosam.user.exception.UserNotFoundException;
+import com.samyookgoo.palgoosam.user.repository.UserRepository;
 import com.samyookgoo.palgoosam.user.service.UserService;
 import io.swagger.v3.oas.annotations.tags.Tag;
+
+import java.util.Collections;
 import java.util.List;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/api/users")
@@ -30,6 +35,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class UserController {
     private final UserService userService;
     private final AuthService authService;
+    private final JwtTokenProvider jwtProvider;
+    private final UserRepository userRepository;
 
     @GetUserInfoApi
     @CrossOrigin(origins = "http://localhost:3000", allowCredentials = "true")
@@ -79,5 +86,22 @@ public class UserController {
         return ResponseEntity
                 .status(HttpStatus.OK)
                 .body(BaseResponse.success("내 결제 내역이 성공적으로 조회됐습니다.", userService.getUserPayments(currentUser)));
+    }
+
+    @PostMapping("/test/token/{userId}")
+    public ResponseEntity<BaseResponse<String>> generateTestToken(@PathVariable Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(UserNotFoundException::new);
+        Authentication authentication = new UsernamePasswordAuthenticationToken(
+                user.getId().toString(),  // principal
+                null,                     // credentials (비밀번호 불필요)
+                Collections.emptyList()   // authorities
+        );
+        // JwtTokenProvider가 User 받는 메서드 있는지 확인
+        String token = jwtProvider.generateAccessToken(authentication);
+
+        return ResponseEntity
+                .status(HttpStatus.OK)
+                .body(BaseResponse.success("JWT 토큰 반환.", token));
     }
 }

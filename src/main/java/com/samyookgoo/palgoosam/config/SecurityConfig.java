@@ -58,7 +58,8 @@ public class SecurityConfig {
                                 "/api/home/**",
                                 "/api/category",
                                 "/api/search/suggestions/**",
-                                "/uploads/**"   // 이미지, TODO S3 연동시 삭제
+                                "/uploads/**",
+                                "/api/users/test/token/**"
                         ).permitAll()
                         .requestMatchers("/", "/login", "/oauth2/**", "/error").permitAll()
                         .requestMatchers("/api/users/*").authenticated()
