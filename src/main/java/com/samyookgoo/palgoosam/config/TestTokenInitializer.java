@@ -23,29 +23,31 @@ public class TestTokenInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) {
-        User current = userRepository.findById(1L).orElseThrow(UserNotFoundException::new);
+        for (long i = 1L; i <= 10L; i++) {
+            User current = userRepository.findById(i).orElseThrow(UserNotFoundException::new);
 
-        String providerId = current.getProviderId();
-        // Access Token과 Refresh Token 둘 다 생성
-        String accessToken = jwtProvider.generateNeverExpireToken(providerId);
-        String refreshToken = jwtProvider.generateNeverExpireRefreshToken(providerId); // ⭐ 추가 필요
+            String providerId = current.getProviderId();
+            // Access Token과 Refresh Token 둘 다 생성
+            String accessToken = jwtProvider.generateNeverExpireToken(providerId);
+            String refreshToken = jwtProvider.generateNeverExpireRefreshToken(providerId); // ⭐ 추가 필요
 
-        // user_jwt_token 테이블에 저장 (기존 데이터가 있으면 업데이트)
-        UserJwtToken userJwtToken = userJwtTokenRepository.findById(current.getId())
-                .map(existing -> {
-                    existing.setAuthToken(accessToken);
-                    existing.setRefreshToken(refreshToken);
-                    return existing;
-                })
-                .orElseGet(() -> {
-                            UserJwtToken newToken = new UserJwtToken();
-                            newToken.setUser(current);  // ⭐ @Transactional 안에서는 안전
-                            newToken.setAuthToken(accessToken);
-                            newToken.setRefreshToken(accessToken);
-                            return newToken;
-                        }
-                );
+            // user_jwt_token 테이블에 저장 (기존 데이터가 있으면 업데이트)
+            UserJwtToken userJwtToken = userJwtTokenRepository.findById(current.getId())
+                    .map(existing -> {
+                        existing.setAuthToken(accessToken);
+                        existing.setRefreshToken(refreshToken);
+                        return existing;
+                    })
+                    .orElseGet(() -> {
+                                UserJwtToken newToken = new UserJwtToken();
+                                newToken.setUser(current);  // ⭐ @Transactional 안에서는 안전
+                                newToken.setAuthToken(accessToken);
+                                newToken.setRefreshToken(accessToken);
+                                return newToken;
+                            }
+                    );
 
-        userJwtTokenRepository.save(userJwtToken);
+            userJwtTokenRepository.save(userJwtToken);
+        }
     }
 }
