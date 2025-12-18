@@ -15,10 +15,12 @@ import com.samyookgoo.palgoosam.bid.repository.BidRepository;
 import com.samyookgoo.palgoosam.bid.service.response.BidStatsResponse;
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
 import com.samyookgoo.palgoosam.user.domain.User;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -38,16 +40,11 @@ public class BidService {
 
         List<Bid> allBids = getByAuctionIdOrderByCreatedAtDesc(auctionId);
 
-        Map<Boolean, List<Bid>> partitioned = allBids.stream()
-                .collect(Collectors.partitioningBy(Bid::isCancelled));
+        Map<Boolean, List<Bid>> partitioned = allBids.stream().collect(Collectors.partitioningBy(Bid::isCancelled));
 
-        List<BidResponse> activeBids = partitioned.get(false).stream()
-                .map(BidResponse::from)
-                .collect(Collectors.toList());
+        List<BidResponse> activeBids = partitioned.get(false).stream().map(BidResponse::from).collect(Collectors.toList());
 
-        List<BidResponse> cancelledBids = partitioned.get(true).stream()
-                .map(BidResponse::from)
-                .collect(Collectors.toList());
+        List<BidResponse> cancelledBids = partitioned.get(true).stream().map(BidResponse::from).collect(Collectors.toList());
 
         BidResponse recentUserBid = null;
         if (user != null && !hasUserCancelledBid(auctionId, user.getId())) {
@@ -56,22 +53,16 @@ public class BidService {
         }
 
         BidStatsResponse bidStats = getBidStatsByAuctionId(auctionId);
-        return BidOverviewResponse.builder()
-                .auctionId(auctionId)
-                .currentPrice(bidStats.getMaxPrice())
-                .totalBid(bidStats.getTotalBid())
-                .totalBidder(bidStats.getTotalBidder())
-                .canCancelBid(recentUserBid != null)
-                .recentUserBid(recentUserBid)
-                .bids(activeBids)
-                .cancelledBids(cancelledBids)
-                .build();
+        return BidOverviewResponse.builder().auctionId(auctionId).currentPrice(bidStats.getMaxPrice()).totalBid(bidStats.getTotalBid()).totalBidder(bidStats.getTotalBidder()).canCancelBid(recentUserBid != null).recentUserBid(recentUserBid).bids(activeBids).cancelledBids(cancelledBids).build();
     }
 
     @Transactional
     public BidResultResponse placeBid(Long auctionId, User user, int price) {
-        Auction auction = auctionRepository.findById(auctionId)
+        // 비관적 락으로 Auction 조회 (다른 트랜잭션들은 대기하게 됨)
+        Auction auction = auctionRepository.findByIdWithLock(auctionId)
                 .orElseThrow(AuctionNotFoundException::new);
+//        Auction auction = auctionRepository.findById(auctionId)
+//                .orElseThrow(AuctionNotFoundException::new);
 
         LocalDateTime now = LocalDateTime.now();
         Bid newBid = createValidatedBid(auction, user, price, now);
@@ -93,8 +84,7 @@ public class BidService {
             throw new AuctionNotFoundException();
         }
 
-        Bid bid = bidRepository.findById(bidId)
-                .orElseThrow(BidNotFoundException::new);
+        Bid bid = bidRepository.findById(bidId).orElseThrow(BidNotFoundException::new);
 
         validateBidCancelable(auctionId, userId, bid, now);
 
@@ -111,11 +101,7 @@ public class BidService {
     }
 
     private BidResponse findRecentUserBid(List<Bid> activeBids, Long userId, LocalDateTime thresholdTime) {
-        return activeBids.stream()
-                .filter(bid -> bid.isOwner(userId) && bid.getCreatedAt().isAfter(thresholdTime))
-                .findFirst()
-                .map(BidResponse::from)
-                .orElse(null);
+        return activeBids.stream().filter(bid -> bid.isOwner(userId) && bid.getCreatedAt().isAfter(thresholdTime)).findFirst().map(BidResponse::from).orElse(null);
     }
 
     private void validateBidCancelable(Long auctionId, Long userId, Bid bid, LocalDateTime now) {
@@ -142,13 +128,11 @@ public class BidService {
     }
 
     private void deactivatePreviousWinningBid(Long auctionId) {
-        bidRepository.findTopValidBidByAuctionId(auctionId)
-                .ifPresent(prev -> prev.setIsWinning(false));
+        bidRepository.findTopValidBidByAuctionId(auctionId).ifPresent(prev -> prev.setIsWinning(false));
     }
 
     private void activateNewWinningBid(Long auctionId) {
-        bidRepository.findTopValidBidByAuctionId(auctionId)
-                .ifPresent(newWinner -> newWinner.setIsWinning(true));
+        bidRepository.findTopValidBidByAuctionId(auctionId).ifPresent(newWinner -> newWinner.setIsWinning(true));
     }
 
 
@@ -161,13 +145,7 @@ public class BidService {
 
     private BidEventResponse createBidEventResponse(Long auctionId, Bid bid, boolean isCancelled) {
         BidStatsResponse bidStats = getBidStatsByAuctionId(auctionId);
-        return BidEventResponse.builder()
-                .currentPrice(bidStats.getMaxPrice())
-                .totalBid(bidStats.getTotalBid())
-                .totalBidder(bidStats.getTotalBidder())
-                .isCancelled(isCancelled)
-                .bid(BidResponse.from(bid))
-                .build();
+        return BidEventResponse.builder().currentPrice(bidStats.getMaxPrice()).totalBid(bidStats.getTotalBid()).totalBidder(bidStats.getTotalBidder()).isCancelled(isCancelled).bid(BidResponse.from(bid)).build();
     }
 
     private BidStatsResponse getBidStatsByAuctionId(Long auctionId) {
