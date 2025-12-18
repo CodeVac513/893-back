@@ -10,11 +10,15 @@ import com.samyookgoo.palgoosam.auction.projection.RankingAuction;
 import com.samyookgoo.palgoosam.auction.projection.RecentAuction;
 import com.samyookgoo.palgoosam.auction.projection.SubCategoryBestItem;
 import com.samyookgoo.palgoosam.auction.projection.UpcomingAuction;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -22,6 +26,11 @@ import org.springframework.data.repository.query.Param;
 public interface AuctionRepository extends JpaRepository<Auction, Long> {
 
     Optional<Auction> findById(Long id);
+
+    // 비관적 락 메서드 추가
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM Auction a WHERE a.id = :id")
+    Optional<Auction> findByIdWithLock(@Param("id") Long id);
 
     List<Auction> findByCategoryIdAndStatus(Long categoryId, AuctionStatus status);
 
