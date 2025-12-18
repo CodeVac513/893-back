@@ -15,10 +15,12 @@ import com.samyookgoo.palgoosam.bid.repository.BidRepository;
 import com.samyookgoo.palgoosam.bid.service.response.BidStatsResponse;
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
 import com.samyookgoo.palgoosam.user.domain.User;
+
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -70,15 +72,23 @@ public class BidService {
 
     @Transactional
     public BidResultResponse placeBid(Long auctionId, User user, int price) {
+        // 1. Auction 조회 (Version 컬럼 추가)
         Auction auction = auctionRepository.findById(auctionId)
                 .orElseThrow(AuctionNotFoundException::new);
-
         LocalDateTime now = LocalDateTime.now();
+
+        // 2. 검증 및 Bid 생성
         Bid newBid = createValidatedBid(auction, user, price, now);
 
         deactivatePreviousWinningBid(auctionId);
-
         bidRepository.save(newBid);
+
+        // 3-1. Auction을 업데이트해서 version 증가
+        auction.setUpdatedAt(now);
+        auctionRepository.save(auction);
+
+        // 3-2. Auction에 Bid Count와 같은 필드 추가
+        // 이 방법은 역정규화를 통한 방법이므로, 좋지 않다고 생각하여 시도 X
 
         BidEventResponse event = createBidEventResponse(auctionId, newBid, false);
         broadcastBidEvent(auctionId, event);
