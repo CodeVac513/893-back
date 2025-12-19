@@ -13,6 +13,7 @@ import com.samyookgoo.palgoosam.bid.exception.BidInvalidStateException;
 import com.samyookgoo.palgoosam.bid.exception.BidNotFoundException;
 import com.samyookgoo.palgoosam.bid.repository.BidRepository;
 import com.samyookgoo.palgoosam.bid.service.response.BidStatsResponse;
+import com.samyookgoo.palgoosam.common.lock.SimpleSpinLock;
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
 import com.samyookgoo.palgoosam.user.domain.User;
 import java.time.LocalDateTime;
@@ -29,6 +30,7 @@ public class BidService {
     private final BidRepository bidRepository;
     private final AuctionRepository auctionRepository;
     private final SseService sseService;
+    private final SimpleSpinLock spinLock;
 
     @Transactional(readOnly = true)
     public BidOverviewResponse getBidOverview(Long auctionId, User user) {
@@ -70,21 +72,37 @@ public class BidService {
 
     @Transactional
     public BidResultResponse placeBid(Long auctionId, User user, int price) {
-        Auction auction = auctionRepository.findById(auctionId)
-                .orElseThrow(AuctionNotFoundException::new);
 
-        LocalDateTime now = LocalDateTime.now();
-        Bid newBid = createValidatedBid(auction, user, price, now);
+        // SimpleSpinLock의 key 생성
+        String lockKey = "auction:bid:" + auctionId;
+        String lockValue = "user:" + user.getId() + ":" + System.currentTimeMillis();
 
-        deactivatePreviousWinningBid(auctionId);
+        // 락 획득 시도
+        boolean acquired = spinLock.tryLock(lockKey, lockValue, 10L);
 
-        bidRepository.save(newBid);
+        if (!acquired) {
+            throw new BidBadRequestException(ErrorCode.BID_LOCK_CONFLICT);
+        }
+        try {
+            Auction auction = auctionRepository.findById(auctionId)
+                    .orElseThrow(AuctionNotFoundException::new);
 
-        BidEventResponse event = createBidEventResponse(auctionId, newBid, false);
-        broadcastBidEvent(auctionId, event);
+            LocalDateTime now = LocalDateTime.now();
+            Bid newBid = createValidatedBid(auction, user, price, now);
 
-        boolean canCancelBid = !hasUserCancelledBid(auctionId, user.getId());
-        return BidResultResponse.from(BidResponse.from(newBid), canCancelBid);
+            deactivatePreviousWinningBid(auctionId);
+            bidRepository.save(newBid);
+
+            BidEventResponse event = createBidEventResponse(auctionId, newBid, false);
+            broadcastBidEvent(auctionId, event);
+
+            boolean canCancelBid = !hasUserCancelledBid(auctionId, user.getId());
+            return BidResultResponse.from(BidResponse.from(newBid), canCancelBid);
+
+        } finally {
+            // 락 해제 (반드시 실행)
+            spinLock.unlock(lockKey);
+        }
     }
 
     @Transactional
