@@ -9,6 +9,7 @@ import com.samyookgoo.palgoosam.bid.controller.response.BidResponse;
 import com.samyookgoo.palgoosam.bid.controller.response.BidResultResponse;
 import com.samyookgoo.palgoosam.bid.domain.Bid;
 import com.samyookgoo.palgoosam.bid.exception.BidBadRequestException;
+import com.samyookgoo.palgoosam.bid.exception.BidConflictException;
 import com.samyookgoo.palgoosam.bid.exception.BidInvalidStateException;
 import com.samyookgoo.palgoosam.bid.exception.BidNotFoundException;
 import com.samyookgoo.palgoosam.bid.repository.BidRepository;
@@ -22,9 +23,12 @@ import java.util.Map;
 import java.util.stream.Collectors;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BidService {
@@ -57,7 +61,7 @@ public class BidService {
             recentUserBid = findRecentUserBid(partitioned.get(false), user.getId(), oneMinuteAgo);
         }
 
-        BidStatsResponse bidStats = getBidStatsByAuctionId(auctionId);
+        BidStatsResponse bidStats = bidRepository.findBidStatsByAuctionId(auctionId);
         return BidOverviewResponse.builder()
                 .auctionId(auctionId)
                 .currentPrice(bidStats.getMaxPrice())
@@ -72,29 +76,55 @@ public class BidService {
 
     @Transactional
     public BidResultResponse placeBid(Long auctionId, User user, int price) {
-        // 1. Auction 조회 (Version 컬럼 추가)
-        Auction auction = auctionRepository.findById(auctionId)
-                .orElseThrow(AuctionNotFoundException::new);
-        LocalDateTime now = LocalDateTime.now();
+        try {
+            log.info("=== [START] placeBid - auctionId: {}, userId: {}, price: {}",
+                    auctionId, user.getId(), price);
 
-        // 2. 검증 및 Bid 생성
-        Bid newBid = createValidatedBid(auction, user, price, now);
+            // 1. Auction 조회
+            log.info(">>> [STEP 1] Auction 조회 시작");
+            Auction auction = auctionRepository.findById(auctionId)
+                    .orElseThrow(AuctionNotFoundException::new);
+            log.info(">>> [STEP 1] Auction 조회 완료 - version: {}", auction.getVersion());
 
-        deactivatePreviousWinningBid(auctionId);
-        bidRepository.save(newBid);
+            LocalDateTime now = LocalDateTime.now();
+            // 2. 검증 및 Bid 생성
+            log.info(">>> [STEP 2] Bid 생성 시작");
+            Bid newBid = createValidatedBid(auction, user, price, now);
+            log.info(">>> [STEP 2] Bid 생성 완료");
 
-        // 3-1. Auction을 업데이트해서 version 증가
-        auction.setUpdatedAt(now);
-        auctionRepository.save(auction);
+            log.info(">>> [STEP 3] 이전 Bid 비활성화");
+            deactivatePreviousWinningBid(auctionId);
+            log.info(">>> [STEP 4] 새 Bid 저장");
+            bidRepository.save(newBid);
+            log.info(">>> [STEP 4] 새 Bid 저장 완료 (아직 flush 안됨)");
 
-        // 3-2. Auction에 Bid Count와 같은 필드 추가
-        // 이 방법은 역정규화를 통한 방법이므로, 좋지 않다고 생각하여 시도 X
 
-        BidEventResponse event = createBidEventResponse(auctionId, newBid, false);
-        broadcastBidEvent(auctionId, event);
+            // 3. Auction 업데이트
+            log.info(">>> [STEP 5] Auction 업데이트 시작 - 현재 version: {}",
+                    auction.getVersion());
+            auction.setUpdatedAt(now);
+            log.info(">>> [STEP 5] Auction 수정 완료 (메모리상, 아직 flush 안됨)");
 
-        boolean canCancelBid = !hasUserCancelledBid(auctionId, user.getId());
-        return BidResultResponse.from(BidResponse.from(newBid), canCancelBid);
+            log.info(">>> [STEP 6] Auction save 호출");
+            auctionRepository.save(auction);
+            log.info(">>> [STEP 6] Auction save 완료 (아직 flush 안됨)");
+
+            log.info(">>> [STEP 7] SSE 이벤트 발송");
+            BidEventResponse event = createBidEventResponse(auctionId, newBid, false);
+            sseService.broadcastBidUpdate(auctionId, event);
+
+            boolean canCancelBid = !hasUserCancelledBid(auctionId, user.getId());
+
+            log.info("=== [END] placeBid 완료 (트랜잭션 커밋 전)");
+            return BidResultResponse.from(BidResponse.from(newBid), canCancelBid);
+
+        } catch (OptimisticLockingFailureException e) {
+            log.warn(">>> [ERROR] Optimistic Lock 충돌 발생!");
+            throw new BidConflictException(ErrorCode.BID_OPTIMISTIC_LOCK_FAILED);
+        } catch (Exception e) {
+            log.error(">>> [ERROR] 예상치 못한 에러: {}", e.getMessage(), e);
+        }
+        return null;
     }
 
     @Transactional
@@ -113,7 +143,7 @@ public class BidService {
         activateNewWinningBid(auctionId);
 
         BidEventResponse event = createBidEventResponse(auctionId, bid, true);
-        broadcastBidEvent(auctionId, event);
+        sseService.broadcastBidUpdate(auctionId, event);
     }
 
     private List<Bid> getByAuctionIdOrderByCreatedAtDesc(Long auctionId) {
@@ -170,7 +200,7 @@ public class BidService {
     }
 
     private BidEventResponse createBidEventResponse(Long auctionId, Bid bid, boolean isCancelled) {
-        BidStatsResponse bidStats = getBidStatsByAuctionId(auctionId);
+        BidStatsResponse bidStats = bidRepository.findBidStatsByAuctionId(auctionId);
         return BidEventResponse.builder()
                 .currentPrice(bidStats.getMaxPrice())
                 .totalBid(bidStats.getTotalBid())
@@ -178,13 +208,5 @@ public class BidService {
                 .isCancelled(isCancelled)
                 .bid(BidResponse.from(bid))
                 .build();
-    }
-
-    private BidStatsResponse getBidStatsByAuctionId(Long auctionId) {
-        return bidRepository.findBidStatsByAuctionId(auctionId);
-    }
-
-    private void broadcastBidEvent(Long auctionId, BidEventResponse event) {
-        sseService.broadcastBidUpdate(auctionId, event);
     }
 }

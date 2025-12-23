@@ -42,6 +42,8 @@ public enum ErrorCode {
     BID_CANCEL_LIMIT_EXCEEDED(400, "BID_010", "입찰 취소는 1회까지만 가능합니다."),
     WINNING_BID_NOT_FOUND(400, "BID_011", "낙찰된 입찰이 존재하지 않습니다."),
     BID_EXCEEDS_MAXIMUM(400, "BID_012", "입찰 금액은 최대 10억까지 가능합니다."),
+    BID_OPTIMISTIC_LOCK_FAILED(400, "BID_013", "동시 입찰이 많아 처리할 수 없습니다. 잠시 후 다시 시도해주세요."),
+    BID_RETRY_INTERRUPTED(400, "BID_014", "재시도 횟수가 초과되었습니다. 잠시 후 다시 시도해주세요."),
 
     // FCM
     FCM_TOKEN_MISSING(404, "FCM_001", "토큰이 없습니다."),
@@ -73,6 +75,7 @@ public enum ErrorCode {
     INVALID_TYPE_VALUE(400, "SYS_004", "요청 값의 타입이 잘못되었습니다."),
     ENTITY_NOT_FOUND(400, "SYS_005", "지정한 Entity를 찾을 수 없습니다."),
     AUTH_ERROR(400, "AU_001", "인증 관련 오류가 발생했습니다.");
+
 
     private final String code;
     private final String message;

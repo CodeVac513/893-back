@@ -10,16 +10,22 @@ import com.samyookgoo.palgoosam.auction.projection.RankingAuction;
 import com.samyookgoo.palgoosam.auction.projection.RecentAuction;
 import com.samyookgoo.palgoosam.auction.projection.SubCategoryBestItem;
 import com.samyookgoo.palgoosam.auction.projection.UpcomingAuction;
+import jakarta.persistence.LockModeType;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 public interface AuctionRepository extends JpaRepository<Auction, Long> {
+
+    @Lock(LockModeType.OPTIMISTIC_FORCE_INCREMENT)
+    @Query("SELECT a FROM Auction a WHERE a.id = :id")
+    Optional<Auction> findByIdWithOptimisticLock(@Param("id") Long id);
 
     Optional<Auction> findById(Long id);
 

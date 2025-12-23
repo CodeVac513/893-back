@@ -1,6 +1,7 @@
 package com.samyookgoo.palgoosam.bid.controller.response;
 
 import com.samyookgoo.palgoosam.bid.domain.Bid;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import lombok.Builder;
 import lombok.Getter;
@@ -21,7 +22,7 @@ public class BidResponse {
                 .bidId(bid.getId())
                 .bidderEmail(maskName(bid.getBidder().getName()))
                 .bidPrice(bid.getPrice())
-                .createdAt(bid.getCreatedAt().format(formatter))
+                .createdAt(LocalDateTime.now().format(formatter))
                 .updatedAt(bid.getUpdatedAt() != null ? bid.getUpdatedAt().format(formatter) : null)
                 .build();
     }
