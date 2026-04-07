@@ -18,12 +18,12 @@ public class RedisConfig {
 
     private final ObjectMapper objectMapper;
 
+    private String host = "localhost";
+    private int port = 6379;
+
     @Bean
     public RedisConnectionFactory redisConnectionFactory() {
-        LettuceConnectionFactory factory = new LettuceConnectionFactory();
-        factory.setHostName("localhost");  // 명시적으로 설정
-        factory.setPort(6379);
-        return factory;
+        return new LettuceConnectionFactory(host, port);
     }
 
     @Bean
