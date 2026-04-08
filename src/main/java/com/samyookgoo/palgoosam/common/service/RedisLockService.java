@@ -4,26 +4,29 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.core.script.RedisScript;
 import org.springframework.stereotype.Service;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class RedisLockService {
     private final RedisTemplate<String, Object> redisTemplate;
     private static final String bidLockPrefix = "lock:auction:";
 
-    public UUID lockWithRetry(Integer auctionId) {
+    public UUID lockWithRetry(Long auctionId) {
         UUID uuid = tryLock(auctionId);
         while (uuid == null) {
             uuid = tryLock(auctionId);
         }
+        log.info("UUID[{}]: Lock 획득 성공", uuid.toString());
         return uuid;
     }
 
-    private UUID tryLock(Integer auctionId) {
+    private UUID tryLock(Long auctionId) {
         String key = bidLockPrefix + auctionId;
         UUID uuid = UUID.randomUUID();
         Duration timeout = Duration.ofSeconds(3);
@@ -32,7 +35,7 @@ public class RedisLockService {
         return Boolean.TRUE.equals(result) ? uuid : null;
     }
 
-    public Boolean unlock(Integer auctionId, UUID uuid) {
+    public Boolean unlock(Long auctionId, UUID uuid) {
         String key = bidLockPrefix + auctionId;
         String script = """
                     if redis.call("get", KEYS[1]) == ARGV[1] then
