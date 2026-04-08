@@ -13,22 +13,29 @@ import com.samyookgoo.palgoosam.bid.exception.BidInvalidStateException;
 import com.samyookgoo.palgoosam.bid.exception.BidNotFoundException;
 import com.samyookgoo.palgoosam.bid.repository.BidRepository;
 import com.samyookgoo.palgoosam.bid.service.response.BidStatsResponse;
+import com.samyookgoo.palgoosam.common.service.RedisLockService;
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
 import com.samyookgoo.palgoosam.user.domain.User;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class BidService {
     private final BidRepository bidRepository;
     private final AuctionRepository auctionRepository;
     private final SseService sseService;
+    private final RedisLockService redisLockService;
+    private final TransactionTemplate transactionTemplate;
 
     @Transactional(readOnly = true)
     public BidOverviewResponse getBidOverview(Long auctionId, User user) {
@@ -68,23 +75,31 @@ public class BidService {
                 .build();
     }
 
-    @Transactional
     public BidResultResponse placeBid(Long auctionId, User user, int price) {
         Auction auction = auctionRepository.findById(auctionId)
                 .orElseThrow(AuctionNotFoundException::new);
+        UUID uuid = redisLockService.lockWithRetry(auctionId);
+        try {
+            return transactionTemplate.execute(status -> {
+                LocalDateTime now = LocalDateTime.now();
+                Bid newBid = createValidatedBid(auction, user, price, now);
 
-        LocalDateTime now = LocalDateTime.now();
-        Bid newBid = createValidatedBid(auction, user, price, now);
+                deactivatePreviousWinningBid(auctionId);
 
-        deactivatePreviousWinningBid(auctionId);
+                bidRepository.save(newBid);
 
-        bidRepository.save(newBid);
+                BidEventResponse event = createBidEventResponse(auctionId, newBid, false);
+                broadcastBidEvent(auctionId, event);
+                boolean canCancelBid = !hasUserCancelledBid(auctionId, user.getId());
+                log.info("정상적으로 입찰이 완료되었습니다!");
+                return BidResultResponse.from(BidResponse.from(newBid), canCancelBid);
+            });
 
-        BidEventResponse event = createBidEventResponse(auctionId, newBid, false);
-        broadcastBidEvent(auctionId, event);
-
-        boolean canCancelBid = !hasUserCancelledBid(auctionId, user.getId());
-        return BidResultResponse.from(BidResponse.from(newBid), canCancelBid);
+        } finally {
+            if(redisLockService.unlock(auctionId, uuid)) {
+                log.info("UUID[{}]: Lock이 정상적으로 해제되었습니다.", uuid);
+            }
+        }
     }
 
     @Transactional
