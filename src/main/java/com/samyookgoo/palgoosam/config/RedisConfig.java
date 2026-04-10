@@ -43,6 +43,18 @@ public class RedisConfig {
         return template;
     }
 
+    @Bean
+    public ChannelTopic unlockTopic() {
+        return new ChannelTopic("unlock:auction");
+    }
+
+    @Bean
+    public RedisMessageListenerContainer redisMessageListenerContainer(RedisConnectionFactory factory) {
+        RedisMessageListenerContainer container = new RedisMessageListenerContainer();
+        container.setConnectionFactory(factory);
+        return container;
+    }
+
 //    @Bean
 //    public ChannelTopic auctionStatusTopic() {
 //        return new ChannelTopic("auction:status");
