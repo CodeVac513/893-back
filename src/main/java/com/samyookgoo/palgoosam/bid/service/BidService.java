@@ -16,6 +16,7 @@ import com.samyookgoo.palgoosam.bid.service.response.BidStatsResponse;
 import com.samyookgoo.palgoosam.common.service.RedisLockService;
 import com.samyookgoo.palgoosam.global.exception.ErrorCode;
 import com.samyookgoo.palgoosam.user.domain.User;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -76,11 +77,12 @@ public class BidService {
     }
 
     public BidResultResponse placeBid(Long auctionId, User user, int price) {
-        Auction auction = auctionRepository.findById(auctionId)
-                .orElseThrow(AuctionNotFoundException::new);
-        UUID uuid = redisLockService.lockWithRetry(auctionId);
+        UUID uuid = redisLockService.lockWithWait(auctionId, Duration.ofMillis(2000));
+
         try {
             return transactionTemplate.execute(status -> {
+                Auction auction = auctionRepository.findById(auctionId)
+                        .orElseThrow(AuctionNotFoundException::new);
                 LocalDateTime now = LocalDateTime.now();
                 Bid newBid = createValidatedBid(auction, user, price, now);
 
@@ -94,10 +96,10 @@ public class BidService {
                 log.info("정상적으로 입찰이 완료되었습니다!");
                 return BidResultResponse.from(BidResponse.from(newBid), canCancelBid);
             });
-
         } finally {
             if(redisLockService.unlock(auctionId, uuid)) {
                 log.info("UUID[{}]: Lock이 정상적으로 해제되었습니다.", uuid);
+                redisLockService.publishUnlock(auctionId);
             }
         }
     }
