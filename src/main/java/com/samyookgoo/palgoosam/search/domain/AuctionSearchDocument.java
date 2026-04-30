@@ -5,10 +5,7 @@ import com.samyookgoo.palgoosam.auction.constant.ItemCondition;
 import com.samyookgoo.palgoosam.auction.domain.Category;
 import jakarta.persistence.Id;
 import lombok.Getter;
-import org.springframework.data.elasticsearch.annotations.Document;
-import org.springframework.data.elasticsearch.annotations.Field;
-import org.springframework.data.elasticsearch.annotations.FieldType;
-import org.springframework.data.elasticsearch.annotations.Setting;
+import org.springframework.data.elasticsearch.annotations.*;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -51,13 +48,13 @@ public class AuctionSearchDocument {
     @Field(name = "scrap_count", type = FieldType.Long)
     private Long scrapCount;
 
-    @Field(name = "created_at", type = FieldType.Date, pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @Field(name = "created_at", type = FieldType.Date, format = DateFormat.date_hour_minute_second, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime createdAt;
 
-    @Field(name = "start_time", type = FieldType.Date, pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @Field(name = "start_time", type = FieldType.Date, format = DateFormat.date_hour_minute_second, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime startTime;
 
-    @Field(name = "end_time", type = FieldType.Date, pattern = "yyyy-MM-dd'T'HH:mm:ss")
+    @Field(name = "end_time", type = FieldType.Date, format = DateFormat.date_hour_minute_second, pattern = "yyyy-MM-dd'T'HH:mm:ss")
     private LocalDateTime endTime;
 
     // 검색 결과 표시용
