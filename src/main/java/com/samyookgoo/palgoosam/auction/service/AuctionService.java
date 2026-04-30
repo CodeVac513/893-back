@@ -566,6 +566,7 @@ public class AuctionService {
         auction.setStatus(AuctionStatus.deleted);
         auction.setIsDeleted(true);
         auctionRepository.save(auction);
+        this.auctionSearchElasticsearchRepository.deleteById(auctionId.toString());
     }
 
     private void softDeleteAuctionImages(Long auctionId) {
