@@ -1,5 +1,7 @@
 package com.samyookgoo.palgoosam.search.domain;
 
+import com.samyookgoo.palgoosam.auction.constant.AuctionStatus;
+import com.samyookgoo.palgoosam.auction.constant.ItemCondition;
 import com.samyookgoo.palgoosam.auction.domain.Category;
 import jakarta.persistence.Id;
 import lombok.Getter;
@@ -61,4 +63,21 @@ public class AuctionSearchDocument {
     // 검색 결과 표시용
     @Field(name = "thumbnail_url", type = FieldType.Keyword, index = false)  // 검색 안함
     private String thumbnailUrl;
+
+    public AuctionSearchDocument(String id, String title, String description, List<Long> categoryId, String itemCondition, String status, Integer basePrice, Integer currentPrice, Long bidderCount, Long scrapCount, LocalDateTime createdAt, LocalDateTime startTime, LocalDateTime endTime, String thumbnailUrl) {
+        this.id = id;
+        this.title = title;
+        this.description = description;
+        this.categoryId = categoryId;
+        this.itemCondition = itemCondition;
+        this.status = status;
+        this.basePrice = basePrice;
+        this.currentPrice = currentPrice;
+        this.bidderCount = bidderCount;
+        this.scrapCount = scrapCount;
+        this.createdAt = createdAt;
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.thumbnailUrl = thumbnailUrl;
+    }
 }
