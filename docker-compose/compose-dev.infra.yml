@@ -1,0 +1,48 @@
+name: palgoosam-infra
+services:
+  elastic:
+    build:
+      context: .
+      dockerfile: elasticsearch.custom.dockerfile
+    ports:
+      - 9200:9200
+    volumes:
+      - palgoosam-es:/usr/share/elasticsearch/data
+    environment:
+      # 아래 설정은 개발/테스트 환경에서 간단하게 테스트하기 위한 옵션
+      - discovery.type=single-node # 단일 노드
+      - xpack.security.enabled=false # 보안 설정
+      - xpack.security.http.ssl.enabled=false # 보안 설정
+    networks:
+      - Palgoosam
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.17.4
+    ports:
+      - 5601:5601
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elastic:9200 # kibana가 통신할 Elasticsearch 주소
+    networks:
+      - Palgoosam
+    depends_on:
+      elastic:
+        condition: service_started
+
+  redis:
+    image: 'redis:8.0.6-alpine'
+    ports:
+      - '6379:6379'
+    volumes:
+      - palgoosam-redis:/data
+    networks:
+      - Palgoosam
+    environment:
+      TZ: 'Asia/Seoul'
+
+volumes:
+  palgoosam-es:
+  palgoosam-redis:
+
+networks:
+  Palgoosam:
+    driver: bridge
