@@ -14,6 +14,7 @@ import com.samyookgoo.palgoosam.auction.dto.request.AuctionImageRequest;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionSearchRequestDto;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionUpdateRequest;
 import com.samyookgoo.palgoosam.auction.dto.response.*;
+import com.samyookgoo.palgoosam.auction.event.ElasticsearchAuctionEvent;
 import com.samyookgoo.palgoosam.auction.exception.AuctionCategoryException;
 import com.samyookgoo.palgoosam.auction.exception.AuctionForbiddenException;
 import com.samyookgoo.palgoosam.auction.exception.AuctionImageException;
@@ -59,6 +60,7 @@ import lombok.extern.slf4j.Slf4j;
 //import org.springframework.beans.factory.annotation.Value;
 //import org.springframework.data.redis.core.RedisTemplate;
 //import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.elasticsearch.client.elc.NativeQuery;
@@ -83,6 +85,7 @@ public class AuctionService {
     private final AuctionSearchElasticsearchRepository auctionSearchElasticsearchRepository;
     private final ElasticsearchOperations elasticsearchOperations;
     private final CategoryService categoryService;
+    private final ApplicationEventPublisher publisher;
     //    private final S3Service s3Service;
 //    private final StringRedisTemplate stringRedisTemplate;
 
@@ -133,11 +136,13 @@ public class AuctionService {
                 savedAuction.getEndTime(),
                 imageResponses.getFirst().getUrl()
         );
-        this.auctionSearchElasticsearchRepository.save(searchDocument);
+        publisher.publishEvent(new ElasticsearchAuctionEvent(searchDocument));
 
         return AuctionCreateResponse.of(auction, imageResponses, category,
                 request.getStartDelay(), request.getDurationTime());
     }
+
+
 
     @Transactional(readOnly = true)
     public AuctionDetailResponse getAuctionDetail(Long auctionId) {
