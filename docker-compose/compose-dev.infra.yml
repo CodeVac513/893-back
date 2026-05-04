@@ -39,6 +39,14 @@ services:
     environment:
       TZ: 'Asia/Seoul'
 
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy
+    ports:
+      - "8474:8474"   # Toxiproxy 관리 API
+      - "9201:9201"   # ES 프록시 포트 (앱은 여기로 연결)
+    networks:
+      - Palgoosam
+
 volumes:
   palgoosam-es:
   palgoosam-redis:
