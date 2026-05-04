@@ -82,6 +82,7 @@ public class AuctionService {
     private final AuctionSearchRepository auctionSearchRepository;
     private final AuctionSearchElasticsearchRepository auctionSearchElasticsearchRepository;
     private final ElasticsearchOperations elasticsearchOperations;
+    private final CategoryService categoryService;
     //    private final S3Service s3Service;
 //    private final StringRedisTemplate stringRedisTemplate;
 
@@ -106,12 +107,33 @@ public class AuctionService {
         LocalDateTime endTime = startTime.plusMinutes(request.getDurationTime());
 
         Auction auction = Auction.from(request, category, user, startTime, endTime);
-        auctionRepository.save(auction);
+        Auction savedAuction = auctionRepository.save(auction);
 
 //        setRedisStartTrigger(auction.getId(), auction.getStartTime());
 //        setRedisEndTrigger(auction.getId(), auction.getEndTime());
 
         List<AuctionImageResponse> imageResponses = saveAuctionImages(request.getImages(), auction);
+
+        //ES 등록 및 등록을 위한 데이터 확인
+        List<Long> ancestorIds = categoryService.collectAncestorIds(category);
+
+        AuctionSearchDocument searchDocument = new AuctionSearchDocument(
+                savedAuction.getId().toString(),
+                savedAuction.getTitle(),
+                savedAuction.getDescription(),
+                ancestorIds,
+                savedAuction.getItemCondition().toString(),
+                savedAuction.getStatus().toString(),
+                savedAuction.getBasePrice(),
+                savedAuction.getBasePrice(),
+                0L,
+                0L,
+                savedAuction.getCreatedAt(),
+                savedAuction.getStartTime(),
+                savedAuction.getEndTime(),
+                imageResponses.getFirst().getUrl()
+        );
+        this.auctionSearchElasticsearchRepository.save(searchDocument);
 
         return AuctionCreateResponse.of(auction, imageResponses, category,
                 request.getStartDelay(), request.getDurationTime());
@@ -544,6 +566,7 @@ public class AuctionService {
         auction.setStatus(AuctionStatus.deleted);
         auction.setIsDeleted(true);
         auctionRepository.save(auction);
+        this.auctionSearchElasticsearchRepository.deleteById(auctionId.toString());
     }
 
     private void softDeleteAuctionImages(Long auctionId) {

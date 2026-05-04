@@ -3,6 +3,8 @@ package com.samyookgoo.palgoosam.auction.service;
 import com.samyookgoo.palgoosam.auction.domain.Category;
 import com.samyookgoo.palgoosam.auction.dto.response.CategoryResponseDto;
 import com.samyookgoo.palgoosam.auction.repository.CategoryRepository;
+
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -25,5 +27,15 @@ public class CategoryService {
             responseDto.setParentId(category.getParent() != null ? category.getParent().getId() : null);
             return responseDto;
         }).toList();
+    }
+
+    public List<Long> collectAncestorIds(Category category) {
+        List<Long> ids = new ArrayList<>();
+        Category current = category;
+        while (current != null) {
+            ids.add(current.getId());
+            current = current.getParent();
+        }
+        return ids;
     }
 }
