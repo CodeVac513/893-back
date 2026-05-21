@@ -3,11 +3,10 @@ package com.samyookgoo.palgoosam.auction.service;
 import co.elastic.clients.elasticsearch._types.FieldValue;
 import co.elastic.clients.elasticsearch._types.query_dsl.*;
 import com.samyookgoo.palgoosam.auction.constant.AuctionStatus;
+import com.samyookgoo.palgoosam.auction.constant.EventStatus;
+import com.samyookgoo.palgoosam.auction.constant.EventType;
 import com.samyookgoo.palgoosam.auction.constant.ItemCondition;
-import com.samyookgoo.palgoosam.auction.domain.Auction;
-import com.samyookgoo.palgoosam.auction.domain.AuctionImage;
-import com.samyookgoo.palgoosam.auction.domain.AuctionSearchProjection;
-import com.samyookgoo.palgoosam.auction.domain.Category;
+import com.samyookgoo.palgoosam.auction.domain.*;
 import com.samyookgoo.palgoosam.auction.dto.AuctionSearchResultDto;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionCreateRequest;
 import com.samyookgoo.palgoosam.auction.dto.request.AuctionImageRequest;
@@ -22,10 +21,7 @@ import com.samyookgoo.palgoosam.auction.exception.AuctionInvalidStateException;
 import com.samyookgoo.palgoosam.auction.exception.AuctionNotFoundException;
 import com.samyookgoo.palgoosam.auction.exception.AuctionUpdateLockedException;
 import com.samyookgoo.palgoosam.auction.exception.CategoryNotFoundException;
-import com.samyookgoo.palgoosam.auction.repository.AuctionImageRepository;
-import com.samyookgoo.palgoosam.auction.repository.AuctionRepository;
-import com.samyookgoo.palgoosam.auction.repository.AuctionSearchRepository;
-import com.samyookgoo.palgoosam.auction.repository.CategoryRepository;
+import com.samyookgoo.palgoosam.auction.repository.*;
 import com.samyookgoo.palgoosam.auction.service.dto.AuctionSearchDto;
 import com.samyookgoo.palgoosam.auth.service.AuthService;
 import com.samyookgoo.palgoosam.bid.domain.Bid;
@@ -83,6 +79,7 @@ public class AuctionService {
     private final PaymentRepository paymentRepository;
     private final AuctionSearchRepository auctionSearchRepository;
     private final AuctionSearchElasticsearchRepository auctionSearchElasticsearchRepository;
+    private final AuctionOutboxRepository auctionOutboxRepository;
     private final ElasticsearchOperations elasticsearchOperations;
     private final CategoryService categoryService;
     private final ApplicationEventPublisher publisher;
@@ -94,6 +91,8 @@ public class AuctionService {
 
     //    @Value("${cloud.aws.region.static}")
     private String region = "test";
+
+    private final String AGGREGATE_TYPE = "auction";
 
     @Transactional
     public AuctionCreateResponse createAuction(AuctionCreateRequest request) {
@@ -136,12 +135,13 @@ public class AuctionService {
                 savedAuction.getEndTime(),
                 imageResponses.getFirst().getUrl()
         );
-        publisher.publishEvent(new ElasticsearchAuctionEvent(searchDocument));
+        AuctionOutbox auctionOutbox = new AuctionOutbox(AGGREGATE_TYPE, savedAuction.getId(), EventType.AUCTION_CREATED, EventStatus.PENDING);
+        auctionOutboxRepository.save(auctionOutbox);
+        publisher.publishEvent(new ElasticsearchAuctionEvent(searchDocument, auctionOutbox.getId()));
 
         return AuctionCreateResponse.of(auction, imageResponses, category,
                 request.getStartDelay(), request.getDurationTime());
     }
-
 
 
     @Transactional(readOnly = true)
